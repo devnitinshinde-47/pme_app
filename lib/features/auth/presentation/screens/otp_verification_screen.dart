@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:sms_autofill/sms_autofill.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_styles.dart';
 import '../../../../core/routes/app_routes.dart';
@@ -24,14 +25,16 @@ class OtpVerificationScreen extends StatefulWidget {
   State<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
 }
 
-class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
+class _OtpVerificationScreenState extends State<OtpVerificationScreen> with CodeAutoFill {
   late final AuthRepository _authRepository;
   String _enteredOtp = '';
+  String? _autoOtpCode;
   String? _otpError;
   bool _isLoading = false;
   bool _isResending = false;
 
-  int _timerSeconds = 30;
+  static const int _resendCooldownSeconds = 60;
+  int _timerSeconds = _resendCooldownSeconds;
   Timer? _resendTimer;
 
   @override
@@ -39,10 +42,34 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     super.initState();
     _authRepository = widget.authRepository ?? AuthRepository();
     _startResendTimer();
+    _listenForSmsOtp();
+  }
+
+  void _listenForSmsOtp() async {
+    try {
+      await SmsAutoFill().listenForCode();
+    } catch (_) {
+      // Platform unsupported or permission denied
+    }
+  }
+
+  @override
+  void codeUpdated() {
+    if (code != null && code!.isNotEmpty) {
+      final digitsOnly = code!.replaceAll(RegExp(r'\D'), '');
+      if (digitsOnly.length == 6) {
+        setState(() {
+          _autoOtpCode = digitsOnly;
+          _enteredOtp = digitsOnly;
+          _otpError = null;
+        });
+        _handleVerifyOtp();
+      }
+    }
   }
 
   void _startResendTimer() {
-    setState(() => _timerSeconds = 30);
+    setState(() => _timerSeconds = _resendCooldownSeconds);
     _resendTimer?.cancel();
     _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_timerSeconds > 0) {
@@ -79,7 +106,12 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
       if (!mounted) return;
 
-      final user = authResponse.user;
+      if (!authResponse.success || authResponse.user == null) {
+        setState(() => _otpError = 'Incorrect OTP. Please try again.');
+        return;
+      }
+
+      final user = authResponse.user!;
       final welcomeMessage = user.isNewUser
           ? 'Account created! Welcome to Pawan Mate Education.'
           : 'Welcome back, ${user.name}!';
@@ -99,7 +131,14 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _otpError = e.toString());
+      String errorMessage = e.toString();
+      
+      // Check for device change error
+      if (errorMessage.contains('Device change detected') || errorMessage.contains('Contact admin')) {
+        errorMessage = 'Device change detected! Please contact admin to login on a new device.';
+      }
+      
+      setState(() => _otpError = errorMessage);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -225,6 +264,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                 OtpInputField(
                   length: 6,
                   errorText: _otpError,
+                  otpCode: _autoOtpCode,
                   onChanged: (otp) {
                     setState(() {
                       _enteredOtp = otp;

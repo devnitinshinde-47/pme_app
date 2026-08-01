@@ -9,6 +9,7 @@ class OtpInputField extends StatefulWidget {
   final ValueChanged<String> onCompleted;
   final ValueChanged<String>? onChanged;
   final String? errorText;
+  final String? otpCode;
 
   const OtpInputField({
     super.key,
@@ -16,6 +17,7 @@ class OtpInputField extends StatefulWidget {
     required this.onCompleted,
     this.onChanged,
     this.errorText,
+    this.otpCode,
   });
 
   @override
@@ -23,16 +25,70 @@ class OtpInputField extends StatefulWidget {
 }
 
 class _OtpInputFieldState extends State<OtpInputField> {
-  late final List<TextEditingController> _controllers;
-  late final List<FocusNode> _focusNodes;
+  List<TextEditingController> _controllers = [];
+  List<FocusNode> _focusNodes = [];
 
   @override
   void initState() {
     super.initState();
+    _initFields();
+
+    if (widget.otpCode != null && widget.otpCode!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _applyOtpCode(widget.otpCode!, notify: true);
+        }
+      });
+    }
+  }
+
+  void _initFields() {
     _controllers = List.generate(widget.length, (_) => TextEditingController());
     _focusNodes = List.generate(widget.length, (_) => FocusNode());
     for (int i = 0; i < widget.length; i++) {
-      _focusNodes[i].addListener(() => setState(() {}));
+      _focusNodes[i].addListener(() {
+        if (mounted) setState(() {});
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(OtpInputField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_focusNodes.length != widget.length) {
+      _initFields();
+    }
+    if (widget.otpCode != null &&
+        widget.otpCode!.isNotEmpty &&
+        widget.otpCode != oldWidget.otpCode) {
+      final currentCombined = _controllers.map((c) => c.text).join();
+      if (currentCombined != widget.otpCode) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _applyOtpCode(widget.otpCode!, notify: false);
+          }
+        });
+      }
+    }
+  }
+
+  void _applyOtpCode(String code, {bool notify = true}) {
+    final clean = code.replaceAll(RegExp(r'\D'), '');
+    for (int i = 0; i < widget.length; i++) {
+      if (i < clean.length) {
+        _controllers[i].text = clean[i];
+      } else {
+        _controllers[i].clear();
+      }
+    }
+    if (clean.isNotEmpty) {
+      final targetIndex = clean.length >= widget.length ? widget.length - 1 : clean.length;
+      if (targetIndex < _focusNodes.length) {
+        _focusNodes[targetIndex].requestFocus();
+      }
+    }
+    if (notify) {
+      _notifyChange();
     }
   }
 
@@ -62,7 +118,9 @@ class _OtpInputFieldState extends State<OtpInputField> {
       final targetIndex = (clean.length >= widget.length)
           ? widget.length - 1
           : clean.length;
-      _focusNodes[targetIndex].requestFocus();
+      if (targetIndex < _focusNodes.length) {
+        _focusNodes[targetIndex].requestFocus();
+      }
       _notifyChange();
       return;
     }
@@ -89,6 +147,9 @@ class _OtpInputFieldState extends State<OtpInputField> {
     } else {
       // Cleared / Backspace
       _controllers[index].clear();
+      if (index > 0) {
+        _focusNodes[index - 1].requestFocus();
+      }
     }
 
     _notifyChange();
@@ -104,62 +165,56 @@ class _OtpInputFieldState extends State<OtpInputField> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: List.generate(widget.length, (index) {
-            final bool isFocused = _focusNodes[index].hasFocus;
-            final bool hasValue = _controllers[index].text.isNotEmpty;
-            final bool hasError = widget.errorText != null;
+    if (_controllers.length != widget.length || _focusNodes.length != widget.length) {
+      _initFields();
+    }
 
-            Color borderColor = AppColors.cardBorder;
-            if (hasError) {
-              borderColor = AppColors.error;
-            } else if (isFocused) {
-              borderColor = AppColors.primary;
-            } else if (hasValue) {
-              borderColor = AppColors.primary.withValues(alpha: 0.4);
-            }
+    return AutofillGroup(
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: List.generate(widget.length, (index) {
+              final bool isFocused = index < _focusNodes.length && _focusNodes[index].hasFocus;
+              final bool hasValue = index < _controllers.length && _controllers[index].text.isNotEmpty;
+              final bool hasError = widget.errorText != null;
 
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              width: 48,
-              height: 58,
-              decoration: BoxDecoration(
-                color: isFocused ? AppColors.surface : AppColors.inputFill,
-                borderRadius: AppStyles.borderRadiusMedium,
-                border: Border.all(
-                  color: borderColor,
-                  width: isFocused || hasError ? 2.0 : 1.2,
+              Color borderColor = AppColors.cardBorder;
+              if (hasError) {
+                borderColor = AppColors.error;
+              } else if (isFocused) {
+                borderColor = AppColors.primary;
+              } else if (hasValue) {
+                borderColor = AppColors.primary.withValues(alpha: 0.4);
+              }
+
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: 48,
+                height: 58,
+                decoration: BoxDecoration(
+                  color: isFocused ? AppColors.surface : AppColors.inputFill,
+                  borderRadius: AppStyles.borderRadiusMedium,
+                  border: Border.all(
+                    color: borderColor,
+                    width: isFocused || hasError ? 2.0 : 1.2,
+                  ),
+                  boxShadow: isFocused
+                      ? [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.12),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ]
+                      : null,
                 ),
-                boxShadow: isFocused
-                    ? [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.12),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ]
-                    : null,
-              ),
-              child: Center(
-                child: KeyboardListener(
-                  focusNode: FocusNode(),
-                  onKeyEvent: (event) {
-                    if (event is KeyDownEvent &&
-                        event.logicalKey == LogicalKeyboardKey.backspace &&
-                        _controllers[index].text.isEmpty &&
-                        index > 0) {
-                      _focusNodes[index - 1].requestFocus();
-                      _controllers[index - 1].clear();
-                      _notifyChange();
-                    }
-                  },
+                child: Center(
                   child: TextFormField(
                     controller: _controllers[index],
                     focusNode: _focusNodes[index],
                     keyboardType: TextInputType.number,
+                    autofillHints: const [AutofillHints.oneTimeCode],
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontSize: 22,
@@ -168,7 +223,7 @@ class _OtpInputFieldState extends State<OtpInputField> {
                     ),
                     inputFormatters: [
                       FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(6), // Supports paste, single digit enforced in _onTextChanged
+                      LengthLimitingTextInputFormatter(6),
                     ],
                     onChanged: (value) => _onTextChanged(index, value),
                     decoration: const InputDecoration(
@@ -180,29 +235,29 @@ class _OtpInputFieldState extends State<OtpInputField> {
                     ),
                   ),
                 ),
-              ),
-            );
-          }),
-        ),
-        if (widget.errorText != null) ...[
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.info_outline_rounded, size: 14, color: AppColors.error),
-              const SizedBox(width: 4),
-              Text(
-                widget.errorText!,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.error,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
+              );
+            }),
           ),
+          if (widget.errorText != null) ...[
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.info_outline_rounded, size: 14, color: AppColors.error),
+                const SizedBox(width: 4),
+                Text(
+                  widget.errorText!,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.error,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 }

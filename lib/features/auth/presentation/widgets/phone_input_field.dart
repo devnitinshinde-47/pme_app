@@ -32,7 +32,9 @@ class _PhoneInputFieldState extends State<PhoneInputField> {
   void initState() {
     super.initState();
     _focusNode.addListener(() {
-      setState(() => _isFocused = _focusNode.hasFocus);
+      if (mounted) {
+        setState(() => _isFocused = _focusNode.hasFocus);
+      }
     });
   }
 
@@ -180,12 +182,14 @@ class _PhoneInputFieldState extends State<PhoneInputField> {
               children: [
                 const Icon(Icons.info_outline_rounded, size: 14, color: AppColors.error),
                 const SizedBox(width: 4),
-                Text(
-                  widget.errorText!,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.error,
-                    fontWeight: FontWeight.w500,
+                Expanded(
+                  child: Text(
+                    widget.errorText!,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.error,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
               ],

@@ -3,8 +3,14 @@ import 'package:flutter/services.dart';
 import 'core/constants/app_colors.dart';
 import 'core/routes/app_routes.dart';
 
-void main() {
+import 'core/services/fcm_notification_service.dart';
+import 'core/utils/app_cache_manager.dart';
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Configure memory and image cache limits
+  AppCacheManager.instance.configureCacheLimits();
 
   // Configure system status bar and navigation bar to be clearly visible
   SystemChrome.setSystemUIOverlayStyle(
@@ -18,6 +24,13 @@ void main() {
   );
 
   runApp(const PawanMateEducationApp());
+
+  // Do not delay the first Flutter frame for notification permissions, Firebase
+  // initialization, or a network token sync. Those are not required to render
+  // the launch screen and can take several seconds on a cold start.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    FcmNotificationService.instance.initialize();
+  });
 }
 
 class PawanMateEducationApp extends StatelessWidget {

@@ -63,6 +63,21 @@ abstract class AppStyles {
     ),
   ];
 
+  static final List<BoxShadow> glassShadow = [
+    BoxShadow(
+      color: const Color(0xFF0F172A).withValues(alpha: 0.08),
+      blurRadius: 24,
+      spreadRadius: 0,
+      offset: const Offset(0, 8),
+    ),
+    BoxShadow(
+      color: Colors.white.withValues(alpha: 0.50),
+      blurRadius: 1,
+      spreadRadius: 0,
+      offset: const Offset(0, 1),
+    ),
+  ];
+
   // Container Decorations
   static final BoxDecoration cardDecoration = BoxDecoration(
     color: AppColors.surface,

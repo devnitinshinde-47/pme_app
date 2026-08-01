@@ -1,21 +1,397 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_styles.dart';
 import '../../../../core/routes/app_routes.dart';
+import '../../../../core/services/fcm_notification_service.dart';
+import '../../../../core/widgets/liquid_glass_bottom_nav.dart';
 import '../../../auth/data/models/user_model.dart';
+import '../../../auth/data/repositories/auth_repository.dart';
+import '../../../courses/data/repositories/course_repository.dart';
+import '../widgets/app_drawer.dart';
+import 'discover_screen.dart';
+import 'home_tab.dart';
+import 'my_courses_screen.dart';
 
-/// Human-crafted Student Home Dashboard Screen for Pawan Mate Education.
-class HomeScreen extends StatelessWidget {
+/// Main Shell Screen hosting Left Navigation Drawer and Liquid Glass Bottom Navigation Bar.
+class HomeScreen extends StatefulWidget {
   final UserModel? user;
 
   const HomeScreen({super.key, this.user});
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final AuthRepository _authRepository = AuthRepository();
+  int _currentIndex = 0;
+  late UserModel? _currentUser;
+  bool _isPromptingName = false;
+  /// Initial category filter to pass to DiscoverScreen when navigating from Quick Access.
+  String? _discoverInitialFilter;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentUser = widget.user;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _requestNotificationPermission();
+      _checkAndPromptName();
+    });
+  }
+
+  Future<void> _requestNotificationPermission() async {
+    try {
+      final status = await Permission.notification.status;
+      if (!status.isGranted) {
+        await Permission.notification.request();
+      }
+      await FcmNotificationService.instance.syncTokenWithBackend();
+    } catch (_) {}
+  }
+
+  bool get _needsNamePrompt {
+    if (_currentUser == null) return true;
+    final name = _currentUser?.name?.trim();
+    return name == null || name.isEmpty || name == 'Student' || name == 'User';
+  }
+
+  Future<void> _checkAndPromptName() async {
+    // If user object is null, try loading from local session first
+    if (_currentUser == null) {
+      final savedUser = await _authRepository.getStoredUser();
+      if (mounted && savedUser != null) {
+        setState(() => _currentUser = savedUser);
+      }
+    }
+
+    if (!mounted) return;
+
+    if (_needsNamePrompt && !_isPromptingName) {
+      _showEnterNameModal();
+    } else {
+      _checkAndShowMarketingOfferModal();
+    }
+  }
+
+  Future<void> _checkAndShowMarketingOfferModal() async {
+    try {
+      final enrolled = await CourseRepository().getMyEnrolledCourses();
+      if (mounted && enrolled.isEmpty) {
+        _showSpecialOfferDialog();
+      }
+    } catch (_) {}
+  }
+
+  void _showSpecialOfferDialog() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        clipBehavior: Clip.antiAlias,
+        child: Container(
+          width: double.infinity,
+          color: AppColors.surface,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Top Banner Gradient Header
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [AppColors.primaryDark, AppColors.primary],
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.school_rounded, color: Colors.white, size: 36),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFD700),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        '🔥 SPECIAL ADMISSION OFFER',
+                        style: TextStyle(
+                          color: Colors.black87,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Boost Your Engineering & Diploma Scores! 🚀',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Content Body
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    const Text(
+                      'Unlock 100% syllabus coverage, live & recorded lectures, handwritten notes, and solved PYQ papers.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary, height: 1.35),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Feature checklist
+                    const _OfferCheckRow(text: 'Complete MSBTE, SPPU & DBATU syllabus'),
+                    const SizedBox(height: 8),
+                    const _OfferCheckRow(text: 'Previous 5 Years Solved Question Papers'),
+                    const SizedBox(height: 8),
+                    const _OfferCheckRow(text: '24/7 Live Doubt Resolution & Practice Tests'),
+
+                    const SizedBox(height: 20),
+
+                    // Action Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(dialogContext);
+                          setState(() => _currentIndex = 2); // Switch to Discover tab
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 0,
+                        ),
+                        child: const Text(
+                          'Explore & Purchase Courses →',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      child: const Text('Remind Me Later', style: TextStyle(color: AppColors.textMuted, fontSize: 12.5)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showEnterNameModal() {
+    _isPromptingName = true;
+    final nameController = TextEditingController();
+    String? errorText;
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return PopScope(
+              canPop: false, // Require name entry
+              child: AlertDialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                contentPadding: const EdgeInsets.all(24),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Icon Header
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.person_add_alt_1_rounded, color: AppColors.primary, size: 36),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Title & Subtitle
+                    const Center(
+                      child: Text(
+                        'Welcome to PME! 🎓',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Please enter your full name to complete your student profile and get started.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary, height: 1.35),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Name Input Field
+                    TextField(
+                      controller: nameController,
+                      textCapitalization: TextCapitalization.words,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: 'Enter your full name',
+                        hintStyle: const TextStyle(fontSize: 13, color: AppColors.textMuted),
+                        prefixIcon: const Icon(Icons.person_outline_rounded, color: AppColors.primary, size: 20),
+                        errorText: errorText,
+                        filled: true,
+                        fillColor: AppColors.inputFill,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                      ),
+                      onChanged: (_) {
+                        if (errorText != null) {
+                          setModalState(() => errorText = null);
+                        }
+                      },
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Save Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: isSubmitting
+                            ? null
+                            : () async {
+                                final inputName = nameController.text.trim();
+                                if (inputName.isEmpty || inputName.length < 2) {
+                                  setModalState(() => errorText = 'Please enter a valid full name');
+                                  return;
+                                }
+
+                                setModalState(() => isSubmitting = true);
+
+                                final messenger = ScaffoldMessenger.of(context);
+                                try {
+                                  final updatedUser = await _authRepository.updateProfileName(inputName);
+
+                                  if (dialogContext.mounted) {
+                                    Navigator.pop(dialogContext);
+                                  }
+
+                                  _isPromptingName = false;
+
+                                  if (mounted) {
+                                    setState(() {
+                                      _currentUser = updatedUser;
+                                    });
+
+                                    messenger.showSnackBar(
+                                      SnackBar(
+                                        content: Text('Welcome, $inputName! Your profile is set up.'),
+                                        backgroundColor: AppColors.primary,
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                    _checkAndShowMarketingOfferModal();
+                                  }
+                                } catch (e) {
+                                  setModalState(() {
+                                    isSubmitting = false;
+                                    errorText = 'Failed to save name. Please try again.';
+                                  });
+                                }
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 0,
+                        ),
+                        child: isSubmitting
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                              )
+                            : const Text(
+                                'Save & Continue →',
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _openDrawer() {
+    _scaffoldKey.currentState?.openDrawer();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final studentName = user?.name?.isNotEmpty == true ? user!.name! : 'Student';
-    final mobileNumber = user?.mobileNumber.isNotEmpty == true ? '+91 ${user!.mobileNumber}' : '+91 9876543210';
-    final isNewStudent = user?.isNewUser == true;
+    final List<Widget> pages = [
+      HomeTab(
+        user: _currentUser,
+        onOpenDrawer: _openDrawer,
+        onLogout: () => _handleLogout(context),
+        onNavigateToDiscover: ({String? filter}) => setState(() {
+          _discoverInitialFilter = filter;
+          _currentIndex = 2;
+        }),
+        onNavigateToMyCourses: () => setState(() => _currentIndex = 1),
+      ),
+      MyCoursesScreen(
+        onOpenDrawer: _openDrawer,
+        onNavigateToDiscover: () => setState(() => _currentIndex = 2),
+      ),
+      DiscoverScreen(
+        key: ValueKey(_discoverInitialFilter),
+        onOpenDrawer: _openDrawer,
+        onNavigateToMyCourses: () => setState(() => _currentIndex = 1),
+        initialCategoryPill: _discoverInitialFilter,
+      ),
+    ];
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -24,172 +400,37 @@ class HomeScreen extends StatelessWidget {
         statusBarBrightness: Brightness.light,
       ),
       child: Scaffold(
+        key: _scaffoldKey,
+        extendBody: true,
         backgroundColor: AppColors.background,
-        appBar: AppBar(
-          backgroundColor: AppColors.surface,
-          elevation: 1,
-          shadowColor: Colors.black.withValues(alpha: 0.05),
-          automaticallyImplyLeading: false,
-          title: Row(
-            children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: AppColors.primaryLight,
-                child: Text(
-                  studentName.characters.first.toUpperCase(),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Hello, $studentName',
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  Text(
-                    mobileNumber,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.notifications_none_rounded, color: AppColors.textPrimary),
-              onPressed: () {},
+        drawer: AppDrawer(
+          user: _currentUser,
+          onLogout: () => _handleLogout(context),
+        ),
+        body: IndexedStack(
+          index: _currentIndex,
+          children: pages,
+        ),
+        bottomNavigationBar: LiquidGlassBottomNavBar(
+          currentIndex: _currentIndex,
+          onTap: (index) => setState(() => _currentIndex = index),
+          items: const [
+            LiquidGlassNavItem(
+              icon: Icons.home_outlined,
+              activeIcon: Icons.home_rounded,
+              label: 'Home',
             ),
-            IconButton(
-              icon: const Icon(Icons.logout_rounded, color: AppColors.error),
-              tooltip: 'Logout',
-              onPressed: () => _handleLogout(context),
+            LiquidGlassNavItem(
+              icon: Icons.menu_book_outlined,
+              activeIcon: Icons.menu_book_rounded,
+              label: 'My Courses',
+            ),
+            LiquidGlassNavItem(
+              icon: Icons.explore_outlined,
+              activeIcon: Icons.explore_rounded,
+              label: 'Discover',
             ),
           ],
-        ),
-        body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Announcement Banner Card
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20.0),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppColors.primary, AppColors.primaryDark],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: AppStyles.borderRadiusLarge,
-                    boxShadow: AppStyles.primaryGlow,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AppColors.accent,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              isNewStudent ? 'NEW BATCH 2026' : 'ENROLLED STUDENT',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ),
-                          const Icon(Icons.school_outlined, color: Colors.white70, size: 22),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Pawan Mate Education',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Access your lectures, DPPs, test series & study notes.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.white70,
-                          height: 1.35,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 28),
-
-                const Text(
-                  'Quick Access',
-                  style: AppStyles.headingMedium,
-                ),
-                const SizedBox(height: 14),
-
-                // Dashboard Action Grid
-                GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 14,
-                  crossAxisSpacing: 14,
-                  childAspectRatio: 1.25,
-                  children: const [
-                    _FeatureTile(
-                      icon: Icons.play_circle_fill_rounded,
-                      title: 'Live Lectures',
-                      subtitle: 'Attend Live & Recorded',
-                      badgeColor: Color(0xFF10B981),
-                    ),
-                    _FeatureTile(
-                      icon: Icons.quiz_rounded,
-                      title: 'Test Series',
-                      subtitle: 'Mock Exams & Results',
-                      badgeColor: AppColors.accent,
-                    ),
-                    _FeatureTile(
-                      icon: Icons.menu_book_rounded,
-                      title: 'My Batches',
-                      subtitle: 'Subjects & Schedule',
-                      badgeColor: AppColors.primary,
-                    ),
-                    _FeatureTile(
-                      icon: Icons.description_rounded,
-                      title: 'DPPs & Notes',
-                      subtitle: 'Download PDF Study Material',
-                      badgeColor: Color(0xFF8B5CF6),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );
@@ -198,22 +439,25 @@ class HomeScreen extends StatelessWidget {
   void _handleLogout(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
         title: const Text('Confirm Logout'),
         content: const Text('Are you sure you want to log out from Pawan Mate Education?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.of(context).pushNamedAndRemoveUntil(
-                AppRoutes.login,
-                (route) => false,
-              );
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              await _authRepository.logout();
+              if (context.mounted) {
+                Navigator.of(context).pushNamedAndRemoveUntil(
+                  AppRoutes.login,
+                  (route) => false,
+                );
+              }
             },
             child: const Text(
               'Logout',
@@ -226,57 +470,34 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-class _FeatureTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color badgeColor;
-
-  const _FeatureTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.badgeColor,
-  });
+class _OfferCheckRow extends StatelessWidget {
+  final String text;
+  const _OfferCheckRow({required this.text});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16.0),
-      decoration: AppStyles.cardDecoration,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: badgeColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: badgeColor, size: 24),
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: const BoxDecoration(
+            color: AppColors.primaryLight,
+            shape: BoxShape.circle,
           ),
-          const SizedBox(height: 12),
-          Text(
-            title,
+          child: const Icon(Icons.check_rounded, color: AppColors.primary, size: 14),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
             style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
               color: AppColors.textPrimary,
             ),
           ),
-          const SizedBox(height: 2),
-          Text(
-            subtitle,
-            style: const TextStyle(
-              fontSize: 11,
-              color: AppColors.textSecondary,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

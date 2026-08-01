@@ -25,4 +25,13 @@ abstract class AppColors {
   // Status Indicators
   static const Color success = Color(0xFF10B981);
   static const Color error = Color(0xFFEF4444);
+  static const Color warning = Color(0xFFF59E0B);
+
+  // Liquid Glass Palette
+  static final Color glassBackground = Colors.white.withValues(alpha: 0.65);
+  static final Color glassBackgroundDark = const Color(0xFF1B365D).withValues(alpha: 0.70);
+  static final Color glassBorder = Colors.white.withValues(alpha: 0.60);
+  static final Color glassBorderDark = Colors.white.withValues(alpha: 0.18);
+  static final Color glassActivePill = const Color(0xFF1B365D).withValues(alpha: 0.10);
+  static final Color glassActiveGlow = const Color(0xFFF15A24).withValues(alpha: 0.25);
 }
