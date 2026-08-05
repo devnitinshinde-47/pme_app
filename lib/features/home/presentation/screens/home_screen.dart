@@ -14,6 +14,11 @@ import 'discover_screen.dart';
 import 'home_tab.dart';
 import 'my_courses_screen.dart';
 
+import '../../../../core/services/system_config_service.dart';
+import '../../../../core/widgets/under_maintenance_dialog.dart';
+import '../../../../core/widgets/app_update_modal.dart';
+import '../../../../core/widgets/popup_ad_modal.dart';
+
 /// Main Shell Screen hosting Left Navigation Drawer and Liquid Glass Bottom Navigation Bar.
 class HomeScreen extends StatefulWidget {
   final UserModel? user;
@@ -25,13 +30,19 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final _authRepository = AuthRepository();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  final AuthRepository _authRepository = AuthRepository();
+
   int _currentIndex = 0;
   late UserModel? _currentUser;
   bool _isPromptingName = false;
   /// Initial category filter to pass to DiscoverScreen when navigating from Quick Access.
   String? _discoverInitialFilter;
+
+  /// Tracks whether the user already pressed back once on the Home tab.
+  DateTime? _lastBackPressTime;
+
+  static bool _hasShownPopupAdThisSession = false;
 
   @override
   void initState() {
@@ -39,8 +50,44 @@ class _HomeScreenState extends State<HomeScreen> {
     _currentUser = widget.user;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _requestNotificationPermission();
+      _checkSystemConfig();
       _checkAndPromptName();
     });
+  }
+
+  Future<void> _checkSystemConfig() async {
+    try {
+      final config = await SystemConfigService().fetchSystemConfig();
+      if (!mounted || config == null) return;
+
+      // 1. Check Under Maintenance Mode
+      if (config.maintenanceEnabled) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => UnderMaintenanceDialog(
+            config: config,
+            onRetry: () {
+              Navigator.pop(context);
+              _checkSystemConfig();
+            },
+          ),
+        );
+        return;
+      }
+
+      // 2. Check App Version Update Config
+      if (config.appUpdateEnabled) {
+        AppUpdateModal.show(context, config);
+        return;
+      }
+
+      // 3. Check Popup Ad Banner
+      if (config.popupAdEnabled && !_hasShownPopupAdThisSession) {
+        _hasShownPopupAdThisSession = true;
+        PopupAdModal.show(context, config);
+      }
+    } catch (_) {}
   }
 
   Future<void> _requestNotificationPermission() async {
@@ -368,6 +415,37 @@ class _HomeScreenState extends State<HomeScreen> {
     _scaffoldKey.currentState?.openDrawer();
   }
 
+  Future<bool> _onWillPop() async {
+    // If on Discover or My Courses tab, navigate back to Home tab
+    if (_currentIndex != 0) {
+      setState(() => _currentIndex = 0);
+      return false; // Prevent default back action
+    }
+
+    // On Home tab: show toast on first press, exit on second press within 2 seconds
+    final now = DateTime.now();
+    if (_lastBackPressTime == null ||
+        now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
+      _lastBackPressTime = now;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Press back again to exit',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+          ),
+          duration: const Duration(seconds: 2),
+          backgroundColor: Colors.black87,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return false; // Prevent exit on first press
+    }
+
+    return true; // Allow exit on second press
+  }
+
   @override
   Widget build(BuildContext context) {
     final List<Widget> pages = [
@@ -393,44 +471,54 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     ];
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.dark,
-        statusBarBrightness: Brightness.light,
-      ),
-      child: Scaffold(
-        key: _scaffoldKey,
-        extendBody: true,
-        backgroundColor: AppColors.background,
-        drawer: AppDrawer(
-          user: _currentUser,
-          onLogout: () => _handleLogout(context),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldPop = await _onWillPop();
+        if (shouldPop) {
+          SystemNavigator.pop(); // Properly exits the app on Android
+        }
+      },
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
         ),
-        body: IndexedStack(
-          index: _currentIndex,
-          children: pages,
-        ),
-        bottomNavigationBar: LiquidGlassBottomNavBar(
-          currentIndex: _currentIndex,
-          onTap: (index) => setState(() => _currentIndex = index),
-          items: const [
-            LiquidGlassNavItem(
-              icon: Icons.home_outlined,
-              activeIcon: Icons.home_rounded,
-              label: 'Home',
-            ),
-            LiquidGlassNavItem(
-              icon: Icons.menu_book_outlined,
-              activeIcon: Icons.menu_book_rounded,
-              label: 'My Courses',
-            ),
-            LiquidGlassNavItem(
-              icon: Icons.explore_outlined,
-              activeIcon: Icons.explore_rounded,
-              label: 'Discover',
-            ),
-          ],
+        child: Scaffold(
+          key: _scaffoldKey,
+          extendBody: true,
+          backgroundColor: AppColors.background,
+          drawer: AppDrawer(
+            user: _currentUser,
+            onLogout: () => _handleLogout(context),
+          ),
+          body: IndexedStack(
+            index: _currentIndex,
+            children: pages,
+          ),
+          bottomNavigationBar: LiquidGlassBottomNavBar(
+            currentIndex: _currentIndex,
+            onTap: (index) => setState(() => _currentIndex = index),
+            items: const [
+              LiquidGlassNavItem(
+                icon: Icons.home_outlined,
+                activeIcon: Icons.home_rounded,
+                label: 'Home',
+              ),
+              LiquidGlassNavItem(
+                icon: Icons.menu_book_outlined,
+                activeIcon: Icons.menu_book_rounded,
+                label: 'My Courses',
+              ),
+              LiquidGlassNavItem(
+                icon: Icons.explore_outlined,
+                activeIcon: Icons.explore_rounded,
+                label: 'Discover',
+              ),
+            ],
+          ),
         ),
       ),
     );

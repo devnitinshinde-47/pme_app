@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_styles.dart';
@@ -238,12 +239,8 @@ class _BunnyStreamPlayerState extends State<BunnyStreamPlayer> {
 
       fullscreenBtn.onclick = function(e) {
         e.stopPropagation();
-        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-          if (playerContainer.requestFullscreen) { playerContainer.requestFullscreen(); }
-          else if (playerContainer.webkitRequestFullscreen) { playerContainer.webkitRequestFullscreen(); }
-        } else {
-          if (document.exitFullscreen) { document.exitFullscreen(); }
-          else if (document.webkitExitFullscreen) { document.webkitExitFullscreen(); }
+        if (window.OrientationChannel && window.OrientationChannel.postMessage) {
+          window.OrientationChannel.postMessage('toggleFullscreen');
         }
         showControls();
       };
@@ -301,6 +298,8 @@ class _BunnyStreamPlayerState extends State<BunnyStreamPlayer> {
 ''';
   }
 
+  bool _isFullscreen = false;
+
   @override
   void initState() {
     super.initState();
@@ -309,6 +308,18 @@ class _BunnyStreamPlayerState extends State<BunnyStreamPlayer> {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.black)
+      ..addJavaScriptChannel(
+        'OrientationChannel',
+        onMessageReceived: (JavaScriptMessage message) {
+          if (message.message == 'enterFullscreen') {
+            _enterFullscreen();
+          } else if (message.message == 'exitFullscreen') {
+            _exitFullscreen();
+          } else if (message.message == 'toggleFullscreen') {
+            _toggleFullscreen();
+          }
+        },
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (String url) {
@@ -341,6 +352,56 @@ class _BunnyStreamPlayerState extends State<BunnyStreamPlayer> {
       _controller.loadHtmlString(_buildHlsHtml(videoUrl));
     } else {
       _controller.loadHtmlString(_buildHlsHtml('https://test-streams.mux.dev/x36xhtml/x36xhtml.m3u8'));
+    }
+  }
+
+  @override
+  void dispose() {
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: SystemUiOverlay.values,
+    );
+    super.dispose();
+  }
+
+  void _enterFullscreen() {
+    if (!mounted || _isFullscreen) return;
+    setState(() {
+      _isFullscreen = true;
+    });
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  }
+
+  void _exitFullscreen() {
+    if (!mounted) return;
+    if (_isFullscreen) {
+      setState(() {
+        _isFullscreen = false;
+      });
+    }
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: SystemUiOverlay.values,
+    );
+  }
+
+  void _toggleFullscreen() {
+    if (_isFullscreen) {
+      _exitFullscreen();
+    } else {
+      _enterFullscreen();
     }
   }
 

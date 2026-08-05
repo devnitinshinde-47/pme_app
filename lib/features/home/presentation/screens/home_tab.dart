@@ -802,7 +802,7 @@ class _HomeTabState extends State<HomeTab> {
                       title: 'Combo Courses',
                       subtitle: 'Bundles with offers & discounts',
                       badgeColor: const Color(0xFF8B5CF6),
-                      onTap: () => _showComboOffersDialog(),
+                      onTap: () => Navigator.pushNamed(context, AppRoutes.comboOffers),
                     ),
                     _FeatureTile(
                       icon: Icons.school_rounded,

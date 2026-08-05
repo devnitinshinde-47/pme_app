@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_styles.dart';
 import '../../../../core/routes/app_routes.dart';
@@ -370,6 +371,101 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     );
   }
 
+  /// Renders 5 shimmer skeleton cards that match the CourseCard layout.
+  Widget _buildShimmerCardList() {
+    return Shimmer.fromColors(
+      baseColor: const Color(0xFFE8EAF0),
+      highlightColor: const Color(0xFFF5F6FA),
+      period: const Duration(milliseconds: 1100),
+      child: Column(
+        children: List.generate(5, (index) => _buildShimmerCard()),
+      ),
+    );
+  }
+
+  Widget _buildShimmerCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Thumbnail placeholder (16:9)
+          AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Container(color: const Color(0xFFE8EAF0)),
+          ),
+          // Text lines placeholder
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Title line 1
+                Container(
+                  height: 12,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8EAF0),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Title line 2 (shorter)
+                Container(
+                  height: 12,
+                  width: 180,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8EAF0),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Subtitle line
+                Container(
+                  height: 10,
+                  width: 120,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8EAF0),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                // Price + button row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      height: 16,
+                      width: 60,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8EAF0),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    Container(
+                      height: 32,
+                      width: 90,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8EAF0),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -567,10 +663,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
                 // Course Feed / Skeleton / Empty State
                 if (_isLoading)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 40.0),
-                    child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
-                  )
+                  _buildShimmerCardList()
                 else if (_errorMessage != null)
                   Container(
                     width: double.infinity,

@@ -14,6 +14,7 @@ import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
 import '../../features/splash/presentation/screens/splash_screen.dart';
 
+import '../../features/courses/presentation/screens/combo_offers_screen.dart';
 import '../../features/courses/presentation/screens/course_curriculum_screen.dart';
 
 import '../../features/courses/presentation/screens/bunny_video_player_screen.dart';
@@ -61,6 +62,7 @@ abstract class AppRoutes {
   static const String myProgress = '/my-progress';
   static const String notifications = '/notifications';
   static const String courseDetails = '/course-details';
+  static const String comboOffers = '/combo-offers';
   static const String courseCurriculum = '/course-curriculum';
   static const String videoPlayer = '/video-player';
   static const String pdfReader = '/pdf-reader';
@@ -111,6 +113,23 @@ abstract class AppRoutes {
           ),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             const begin = Offset(0.0, 1.0);
+            const end = Offset.zero;
+            final curve = Curves.easeOutCubic;
+            final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+            return SlideTransition(
+              position: animation.drive(tween),
+              child: child,
+            );
+          },
+          transitionDuration: const Duration(milliseconds: 350),
+          settings: routeSettings,
+        );
+
+      case comboOffers:
+        return PageRouteBuilder(
+          pageBuilder: (_, animation, secondaryAnimation) => const ComboOffersScreen(),
+          transitionsBuilder: (_, animation, secondaryAnimation, child) {
+            const begin = Offset(1.0, 0.0);
             const end = Offset.zero;
             final curve = Curves.easeOutCubic;
             final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));

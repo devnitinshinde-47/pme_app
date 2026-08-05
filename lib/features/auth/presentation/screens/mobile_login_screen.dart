@@ -5,6 +5,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_styles.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../../../core/utils/validators.dart';
+import '../../data/datasources/auth_remote_data_source.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/phone_input_field.dart';
@@ -68,6 +69,19 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
       Navigator.of(context).pushNamed(
         AppRoutes.otpVerification,
         arguments: phone,
+      );
+    } on DeviceLockedApiException catch (e) {
+      if (!mounted) return;
+      // Show the Device Locked sheet right at the mobile entry screen —
+      // no OTP was sent (saves SMS credits), and the user gets a clear CTA.
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => _DeviceLockedBottomSheet(
+          userId: e.userId,
+          authRepository: _authRepository,
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -204,6 +218,213 @@ class _MobileLoginScreenState extends State<MobileLoginScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ─── Device Locked Bottom Sheet (shown from mobile login screen) ───────────────
+
+class _DeviceLockedBottomSheet extends StatefulWidget {
+  final String? userId;
+  final AuthRepository authRepository;
+
+  const _DeviceLockedBottomSheet({this.userId, required this.authRepository});
+
+  @override
+  State<_DeviceLockedBottomSheet> createState() => _DeviceLockedBottomSheetState();
+}
+
+class _DeviceLockedBottomSheetState extends State<_DeviceLockedBottomSheet> {
+  bool _isSubmitting = false;
+  bool _requestSent = false;
+  String? _error;
+
+  Future<void> _submitRequest() async {
+    if (widget.userId == null) {
+      setState(() => _error = 'Unable to identify account. Please try again.');
+      return;
+    }
+    setState(() {
+      _isSubmitting = true;
+      _error = null;
+    });
+    try {
+      await widget.authRepository.submitDeviceChangeRequest(widget.userId!);
+      if (!mounted) return;
+      setState(() => _requestSent = true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        24, 20, 24, 24 + MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: _requestSent ? _buildSuccess() : _buildContent(),
+    );
+  }
+
+  Widget _buildContent() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 40, height: 4,
+          decoration: BoxDecoration(
+            color: const Color(0xFFE2E8F0),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(height: 24),
+        Container(
+          width: 64, height: 64,
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF3CD),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: const Icon(Icons.phone_locked_rounded, size: 32, color: Color(0xFFF59E0B)),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'Device Locked',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'This account is already logged in on another device. '
+          'Submit a request to the admin to switch to this device.',
+          style: TextStyle(fontSize: 14, color: Color(0xFF64748B), height: 1.5),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF0F9FF),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFBAE6FD)),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF0284C7)),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'OTP was NOT sent. Admin approval is required before you can login on this device.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF0369A1)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF2F2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(_error!, style: const TextStyle(fontSize: 12, color: Color(0xFFDC2626))),
+          ),
+        ],
+        const SizedBox(height: 24),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _isSubmitting ? null : _submitRequest,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0,
+            ),
+            child: _isSubmitting
+                ? const SizedBox(
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                  )
+                : const Text(
+                    'Request Device Change',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(fontSize: 14, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSuccess() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 40, height: 4,
+          decoration: BoxDecoration(
+            color: const Color(0xFFE2E8F0),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(height: 24),
+        Container(
+          width: 64, height: 64,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF0FDF4),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: const Icon(Icons.check_circle_rounded, size: 36, color: Color(0xFF16A34A)),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'Request Submitted!',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Your device change request has been sent. '
+          'You can login once the admin approves it.',
+          style: TextStyle(fontSize: 14, color: Color(0xFF64748B), height: 1.5),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 28),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0,
+            ),
+            child: const Text(
+              'OK, Got it',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

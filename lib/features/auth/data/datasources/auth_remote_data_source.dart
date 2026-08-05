@@ -12,25 +12,46 @@ class AuthRemoteDataSource {
       : _apiClient = apiClient ?? ApiClient(),
         _deviceIdService = deviceIdService ?? DeviceIdService();
 
-  /// Send 6-digit OTP request to Java Spring Boot student portal
+  /// Send 6-digit OTP request to Java Spring Boot student portal.
+  /// Now passes deviceId so the backend can block sending if the account
+  /// is already locked to a different device.
+  ///
   /// API Contract: POST /api/auth/send-otp
-  /// Body: {"mobileNo": "9876543210"}
+  /// Body: {"mobileNo": "9876543210", "deviceId": "device_fingerprint"}
+  ///
+  /// Throws [DeviceLockedApiException] (errorCode == "DEVICE_LOCKED") when
+  /// the account is bound to another device. All other API errors are rethrown
+  /// as [ApiException] with the real server message — NOT masked as "Incorrect OTP".
   Future<SendOtpResponse> sendOtp(String mobileNo) async {
-    final responseJson = await _apiClient.post(
-      endpoint: ApiConstants.sendOtp,
-      body: {'mobileNo': mobileNo},
-    );
-    return SendOtpResponse.fromJson(responseJson);
+    final deviceId = await _deviceIdService.getDeviceId();
+    try {
+      final responseJson = await _apiClient.post(
+        endpoint: ApiConstants.sendOtp,
+        body: {
+          'mobileNo': mobileNo,
+          'deviceId': deviceId,
+        },
+      );
+      return SendOtpResponse.fromJson(responseJson);
+    } on ApiException catch (e) {
+      // Promote device-locked errors to a typed exception so the UI
+      // can show the dedicated "Device Locked" dialog.
+      if (e.errorCode == 'DEVICE_LOCKED') {
+        throw DeviceLockedApiException(e.message, userId: e.userId);
+      }
+      rethrow;
+    }
   }
 
   /// Verify 6-digit OTP request to Java Spring Boot student portal
   /// API Contract: POST /api/auth/verify-otp
   /// Body: {"mobileNo": "9876543210", "otp": "123456", "deviceId": "device_fingerprint"}
+  ///
+  /// Throws [DeviceLockedApiException] when device mismatch with no approved change request.
+  /// Throws [ApiException] with the real server message for all other errors.
   Future<VerifyOtpResponse> verifyOtp(String mobileNo, String otp) async {
+    final deviceId = await _deviceIdService.getDeviceId();
     try {
-      // Get device ID for single device login enforcement
-      final deviceId = await _deviceIdService.getDeviceId();
-      
       final responseJson = await _apiClient.post(
         endpoint: ApiConstants.verifyOtp,
         body: {
@@ -41,11 +62,8 @@ class AuthRemoteDataSource {
       );
       return VerifyOtpResponse.fromJson(responseJson);
     } on ApiException catch (e) {
-      // The current API reports an invalid OTP with a non-standard error
-      // status. A status code means the verification request reached the API;
-      // only connection failures (which have no status) keep their retry text.
-      if (e.statusCode != null) {
-        throw const ApiException('Incorrect OTP. Please try again.');
+      if (e.errorCode == 'DEVICE_LOCKED') {
+        throw DeviceLockedApiException(e.message, userId: e.userId);
       }
       rethrow;
     }
@@ -85,4 +103,32 @@ class AuthRemoteDataSource {
     );
     return UserModel.fromJson(Map<String, dynamic>.from(responseJson));
   }
+
+  /// Submit a device change request on behalf of the student.
+  /// API Contract: POST /api/auth/device-change-requests
+  /// Body: {"userId": "uuid", "newDeviceId": "device_fingerprint"}
+  Future<SendOtpResponse> submitDeviceChangeRequest(String userId) async {
+    final deviceId = await _deviceIdService.getDeviceId();
+    final responseJson = await _apiClient.post(
+      endpoint: '/api/auth/device-change-requests',
+      body: {
+        'userId': userId,
+        'newDeviceId': deviceId,
+      },
+    );
+    return SendOtpResponse.fromJson(responseJson);
+  }
+}
+
+/// Thrown specifically when the backend returns errorCode == "DEVICE_LOCKED".
+/// Carries [userId] so the UI can immediately submit a device change request
+/// without a separate user-lookup API call.
+class DeviceLockedApiException implements Exception {
+  final String message;
+  final String? userId;
+
+  const DeviceLockedApiException(this.message, {this.userId});
+
+  @override
+  String toString() => message;
 }

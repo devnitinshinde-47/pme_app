@@ -42,6 +42,40 @@ class CourseRepository {
     return uuidRegex.hasMatch(str);
   }
 
+  /// Fetch all active Combo Offer courses
+  Future<List<CourseModel>> getComboCourses({
+    int page = 0,
+    int size = 20,
+  }) async {
+    try {
+      final token = await _localDataSource.getAccessToken();
+      final combos = await _remoteDataSource.fetchComboCourses(
+        page: page,
+        size: size,
+        token: token,
+      );
+      if (combos.isNotEmpty) {
+        return combos;
+      }
+    } catch (_) {}
+
+    // Fallback: check general courses list for isCombo items
+    try {
+      final token = await _localDataSource.getAccessToken();
+      final pageResp = await _remoteDataSource.fetchCourses(
+        page: 0,
+        size: 50,
+        token: token,
+      );
+      final list = pageResp.content.where((c) => c.isCombo).toList();
+      if (list.isNotEmpty) {
+        return list;
+      }
+    } catch (_) {}
+
+    return const [];
+  }
+
   /// Discover courses with university, branch, type, and year filtering
   Future<CoursePageResponse> getCourses({
     String? branch,

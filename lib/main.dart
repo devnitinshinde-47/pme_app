@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:screen_protector/screen_protector.dart';
 import 'core/constants/app_colors.dart';
 import 'core/routes/app_routes.dart';
 
@@ -8,6 +9,14 @@ import 'core/utils/app_cache_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Strictly disable screenshots, screen recordings, and app switcher preview leaks
+  try {
+    await ScreenProtector.preventScreenshotOn();
+    await ScreenProtector.protectDataLeakageWithBlur();
+  } catch (_) {
+    // Unsupported platform or initialization fallback
+  }
 
   // Configure memory and image cache limits
   AppCacheManager.instance.configureCacheLimits();
@@ -33,8 +42,40 @@ void main() async {
   });
 }
 
-class PawanMateEducationApp extends StatelessWidget {
+class PawanMateEducationApp extends StatefulWidget {
   const PawanMateEducationApp({super.key});
+
+  @override
+  State<PawanMateEducationApp> createState() => _PawanMateEducationAppState();
+}
+
+class _PawanMateEducationAppState extends State<PawanMateEducationApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _applyScreenProtection();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _applyScreenProtection();
+    }
+  }
+
+  Future<void> _applyScreenProtection() async {
+    try {
+      await ScreenProtector.preventScreenshotOn();
+      await ScreenProtector.protectDataLeakageWithBlur();
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {

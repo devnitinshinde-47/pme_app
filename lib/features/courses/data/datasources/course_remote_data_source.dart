@@ -60,14 +60,50 @@ class CourseRemoteDataSource {
       final items = response.map((e) => CourseModel.fromJson(e as Map<String, dynamic>)).toList();
       return CoursePageResponse(
         content: items,
-        pageNumber: 0,
-        pageSize: items.length,
+        pageNumber: page,
+        pageSize: size,
         totalElements: items.length,
         totalPages: 1,
         last: true,
       );
+    } else {
+      return const CoursePageResponse(
+        content: [],
+        pageNumber: 0,
+        pageSize: 12,
+        totalElements: 0,
+        totalPages: 0,
+        last: true,
+      );
     }
-    throw const ApiException('Unexpected response format for course discovery');
+  }
+
+  /// Fetch combo offer courses (Paginated)
+  /// Endpoint: GET /api/courses/combos
+  Future<List<CourseModel>> fetchComboCourses({
+    int page = 0,
+    int size = 20,
+    String? token,
+  }) async {
+    final queryParams = <String, String>{
+      'page': page.toString(),
+      'size': size.toString(),
+    };
+
+    final response = await _apiClient.get(
+      customBaseUrl: ApiConstants.coursesBaseUrl,
+      endpoint: '${ApiConstants.courses}/combos',
+      queryParameters: queryParams,
+      token: token,
+    );
+
+    if (response is Map<String, dynamic> && response['content'] is List) {
+      final list = response['content'] as List;
+      return list.map((e) => CourseModel.fromJson(e as Map<String, dynamic>)).toList();
+    } else if (response is List) {
+      return response.map((e) => CourseModel.fromJson(e as Map<String, dynamic>)).toList();
+    }
+    return const [];
   }
 
   /// Get single course details

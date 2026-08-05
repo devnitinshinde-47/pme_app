@@ -36,10 +36,15 @@ class _BunnyVideoPlayerScreenState extends State<BunnyVideoPlayerScreen> {
   bool _isLoadingNote = false;
   bool _isCompleted = false;
   bool _isTogglingProgress = false;
+  bool _isFullscreen = false;
 
   @override
   void initState() {
     super.initState();
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
     _repository = widget.repository ?? CourseRepository();
     _attachedNote = widget.lecture.note;
     _isCompleted = widget.lecture.isCompleted;
@@ -51,6 +56,18 @@ class _BunnyVideoPlayerScreenState extends State<BunnyVideoPlayerScreen> {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.black)
+      ..addJavaScriptChannel(
+        'OrientationChannel',
+        onMessageReceived: (JavaScriptMessage message) {
+          if (message.message == 'enterFullscreen') {
+            _enterFullscreen();
+          } else if (message.message == 'exitFullscreen') {
+            _exitFullscreen();
+          } else if (message.message == 'toggleFullscreen') {
+            _toggleFullscreen();
+          }
+        },
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (String url) {
@@ -88,6 +105,57 @@ class _BunnyVideoPlayerScreenState extends State<BunnyVideoPlayerScreen> {
     // Fetch note by videoId if not already attached directly
     if (_attachedNote == null && widget.courseId != null && widget.courseId!.isNotEmpty) {
       _fetchAttachedNoteByVideoId();
+    }
+  }
+
+  @override
+  void dispose() {
+    // ALWAYS restore portrait orientation and system overlays when leaving the video screen
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: SystemUiOverlay.values,
+    );
+    super.dispose();
+  }
+
+  void _enterFullscreen() {
+    if (!mounted || _isFullscreen) return;
+    setState(() {
+      _isFullscreen = true;
+    });
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  }
+
+  void _exitFullscreen() {
+    if (!mounted) return;
+    if (_isFullscreen) {
+      setState(() {
+        _isFullscreen = false;
+      });
+    }
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: SystemUiOverlay.values,
+    );
+  }
+
+  void _toggleFullscreen() {
+    if (_isFullscreen) {
+      _exitFullscreen();
+    } else {
+      _enterFullscreen();
     }
   }
 
@@ -498,12 +566,8 @@ class _BunnyVideoPlayerScreenState extends State<BunnyVideoPlayerScreen> {
 
       fullscreenBtn.onclick = function(e) {
         e.stopPropagation();
-        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-          if (playerContainer.requestFullscreen) { playerContainer.requestFullscreen(); }
-          else if (playerContainer.webkitRequestFullscreen) { playerContainer.webkitRequestFullscreen(); }
-        } else {
-          if (document.exitFullscreen) { document.exitFullscreen(); }
-          else if (document.webkitExitFullscreen) { document.webkitExitFullscreen(); }
+        if (window.OrientationChannel && window.OrientationChannel.postMessage) {
+          window.OrientationChannel.postMessage('toggleFullscreen');
         }
         showControls();
       };
@@ -654,269 +718,308 @@ class _BunnyVideoPlayerScreenState extends State<BunnyVideoPlayerScreen> {
     );
   }
 
+  Widget _buildPlayerStack() {
+    return Stack(
+      key: const ValueKey('bunny_player_stack'),
+      children: [
+        if (!_hasError)
+          WebViewWidget(
+            key: const ValueKey('bunny_video_webview'),
+            controller: _controller,
+          ),
+
+        if (_isLoading)
+          Container(
+            color: Colors.black,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  CircularProgressIndicator(color: AppColors.primary),
+                  SizedBox(height: 12),
+                  Text(
+                    'Loading Lecture Video...',
+                    style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+        if (_hasError)
+          Container(
+            color: Colors.black,
+            padding: const EdgeInsets.all(20),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.videocam_off_rounded, size: 48, color: AppColors.error),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Unable to load video lecture.',
+                    style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 14),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _hasError = false;
+                        _isLoading = true;
+                      });
+                      _controller.reload();
+                    },
+                    icon: const Icon(Icons.refresh_rounded, size: 16, color: Colors.white),
+                    label: const Text('Retry Stream', style: TextStyle(color: Colors.white, fontSize: 12)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        elevation: 0.5,
-        systemOverlayStyle: SystemUiOverlayStyle.dark,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
-          onPressed: () => Navigator.pop(context),
-          tooltip: 'Back to Curriculum',
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.lecture.title,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-              overflow: TextOverflow.ellipsis,
-            ),
-            Text(
-              '${widget.courseName} • ${widget.lecture.duration ?? "45 mins"}',
-              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Video Player Container (16:9 Aspect Ratio)
-            Container(
-              color: Colors.black,
-              width: double.infinity,
-              child: AspectRatio(
-                aspectRatio: 16 / 9,
-                child: Stack(
+    return PopScope(
+      canPop: !_isFullscreen,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_isFullscreen) {
+          _exitFullscreen();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: _isFullscreen ? Colors.black : AppColors.background,
+        appBar: _isFullscreen
+            ? null
+            : AppBar(
+                backgroundColor: AppColors.surface,
+                elevation: 0.5,
+                systemOverlayStyle: SystemUiOverlayStyle.dark,
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
+                  onPressed: () {
+                    if (_isFullscreen) {
+                      _exitFullscreen();
+                    } else {
+                      Navigator.pop(context);
+                    }
+                  },
+                  tooltip: 'Back to Curriculum',
+                ),
+                title: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (!_hasError) WebViewWidget(controller: _controller),
-
-                    if (_isLoading)
-                      Container(
-                        color: Colors.black,
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              CircularProgressIndicator(color: AppColors.primary),
-                              SizedBox(height: 12),
-                              Text(
-                                'Loading Lecture Video...',
-                                style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                    if (_hasError)
-                      Container(
-                        color: Colors.black,
-                        padding: const EdgeInsets.all(20),
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.videocam_off_rounded, size: 48, color: AppColors.error),
-                              const SizedBox(height: 10),
-                              const Text(
-                                'Unable to load video lecture.',
-                                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 14),
-                              ElevatedButton.icon(
-                                onPressed: () {
-                                  setState(() {
-                                    _hasError = false;
-                                    _isLoading = true;
-                                  });
-                                  _controller.reload();
-                                },
-                                icon: const Icon(Icons.refresh_rounded, size: 16, color: Colors.white),
-                                label: const Text('Retry Stream', style: TextStyle(color: Colors.white, fontSize: 12)),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                    Text(
+                      widget.lecture.title,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      '${widget.courseName} • ${widget.lecture.duration ?? "45 mins"}',
+                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ),
               ),
-            ),
-
-            // Details Surface & Attached Note Section
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(20),
-                    topRight: Radius.circular(20),
+        body: SafeArea(
+          top: !_isFullscreen,
+          bottom: !_isFullscreen,
+          left: !_isFullscreen,
+          right: !_isFullscreen,
+          child: Column(
+            children: [
+              if (_isFullscreen)
+                Expanded(
+                  child: Container(
+                    color: Colors.black,
+                    width: double.infinity,
+                    child: _buildPlayerStack(),
+                  ),
+                )
+              else ...[
+                Container(
+                  color: Colors.black,
+                  width: double.infinity,
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: _buildPlayerStack(),
                   ),
                 ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Consolidated Lecture Details & Completion Action Card
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppColors.cardBorder),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.03),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
+
+                // Details Surface & Attached Note Section
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: const BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(20),
+                        topRight: Radius.circular(20),
+                      ),
+                    ),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Consolidated Lecture Details & Completion Action Card
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: AppColors.cardBorder),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.03),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.lecture.title,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textPrimary,
-                                height: 1.3,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Icon(Icons.school_rounded, size: 14, color: AppColors.primary),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    '${widget.courseName} • ${widget.lecture.duration ?? "45 mins"}',
-                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                Text(
+                                  widget.lecture.title,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textPrimary,
+                                    height: 1.3,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.school_rounded, size: 14, color: AppColors.primary),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      child: Text(
+                                        '${widget.courseName} • ${widget.lecture.duration ?? "45 mins"}',
+                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 14),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 44,
+                                  child: ElevatedButton.icon(
+                                    onPressed: _isTogglingProgress ? null : _toggleCompletion,
+                                    icon: _isTogglingProgress
+                                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                        : Icon(
+                                            _isCompleted ? Icons.check_circle_rounded : Icons.check_circle_outline_rounded,
+                                            color: Colors.white,
+                                            size: 19,
+                                          ),
+                                    label: Text(
+                                      _isCompleted ? 'Completed' : 'Mark Lecture as Completed',
+                                      style: const TextStyle(
+                                        fontSize: 13.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: _isCompleted ? AppColors.success : AppColors.primary,
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
+                          ),
+
+                          // Attached Study Note Card (Only shown if note exists)
+                          if (_isLoadingNote)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12.0),
+                              child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
+                            )
+                          else if (_attachedNote != null) ...[
                             const SizedBox(height: 14),
-                            SizedBox(
-                              width: double.infinity,
-                              height: 44,
-                              child: ElevatedButton.icon(
-                                onPressed: _isTogglingProgress ? null : _toggleCompletion,
-                                icon: _isTogglingProgress
-                                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                    : Icon(
-                                        _isCompleted ? Icons.check_circle_rounded : Icons.check_circle_outline_rounded,
-                                        color: Colors.white,
-                                        size: 19,
-                                      ),
-                                label: Text(
-                                  _isCompleted ? 'Completed' : 'Mark Lecture as Completed',
-                                  style: const TextStyle(
-                                    fontSize: 13.5,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: AppColors.surface,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: AppColors.cardBorder),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.03),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
                                   ),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: _isCompleted ? AppColors.success : AppColors.primary,
-                                  elevation: 0,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                ),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.accent.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Icon(Icons.picture_as_pdf_rounded, color: AppColors.accent, size: 22),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _attachedNote!.title,
+                                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'PDF Study Note • ${_attachedNote!.fileSize ?? "2.4 MB"}',
+                                          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  ElevatedButton.icon(
+                                    onPressed: () => _onOpenPdfNote(_attachedNote!),
+                                    icon: const Icon(Icons.visibility_rounded, size: 14, color: Colors.white),
+                                    label: const Text('Read Note', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.primary,
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
-                        ),
+                        ],
                       ),
-
-                      // Attached Study Note Card (Only shown if note exists)
-                      if (_isLoadingNote)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 12.0),
-                          child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
-                        )
-                      else if (_attachedNote != null) ...[
-                        const SizedBox(height: 14),
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: AppColors.surface,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppColors.cardBorder),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.03),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: AppColors.accent.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Icon(Icons.picture_as_pdf_rounded, color: AppColors.accent, size: 22),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      _attachedNote!.title,
-                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'PDF Study Note • ${_attachedNote!.fileSize ?? "2.4 MB"}',
-                                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              ElevatedButton.icon(
-                                onPressed: () => _onOpenPdfNote(_attachedNote!),
-                                icon: const Icon(Icons.visibility_rounded, size: 14, color: Colors.white),
-                                label: const Text('Read Note', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  elevation: 0,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ),
-          ],
+              ],
+            ],
+          ),
         ),
       ),
     );

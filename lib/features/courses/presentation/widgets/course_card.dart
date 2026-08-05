@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../data/models/course_model.dart';
 
@@ -50,9 +51,27 @@ class CourseCard extends StatelessWidget {
     return 'Expires: $day/$month/$year';
   }
 
+  String _getBranchLabel() {
+    if (course.branches.length == 1) {
+      final branchName = course.branches.first.trim();
+      final lower = branchName.toLowerCase();
+      if (lower == 'all' ||
+          lower == 'common' ||
+          lower == 'all branches' ||
+          lower == 'common for all' ||
+          lower == 'common to all') {
+        return 'Common for all branches';
+      }
+      return branchName;
+    }
+    return 'Common for all branches';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isPolytechnic = course.type.toUpperCase() == 'POLYTECHNIC';
+    final universityName = (course.university != null && course.university!.trim().isNotEmpty)
+        ? course.university!.trim()
+        : 'MSBTE';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16.0),
@@ -83,7 +102,13 @@ class CourseCard extends StatelessWidget {
                     ? Image.network(
                         course.thumbnailUrl!,
                         fit: BoxFit.cover,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return _buildShimmerPlaceholder();
+                        },
                         errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
+                        cacheWidth: 720,
+                        cacheHeight: 405,
                       )
                     : _buildPlaceholder(),
               ),
@@ -94,14 +119,14 @@ class CourseCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // University & Level line + Mode badge
+                    // University short name + Mode badge
                     Row(
                       children: [
                         Expanded(
                           child: Text(
-                            '${course.university ?? "ACADEMIC"} • ${isPolytechnic ? "Diploma" : "Degree"}',
+                            universityName,
                             style: const TextStyle(
-                              fontSize: 10.5,
+                              fontSize: 11,
                               fontWeight: FontWeight.bold,
                               color: AppColors.primary,
                               letterSpacing: 0.3,
@@ -126,6 +151,19 @@ class CourseCard extends StatelessWidget {
                         height: 1.3,
                       ),
                       maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+
+                    // Branch Label (small & simple)
+                    Text(
+                      _getBranchLabel(),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textMuted,
+                      ),
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 6),
@@ -227,6 +265,16 @@ class CourseCard extends StatelessWidget {
         'Enroll Now',
         style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
       ),
+    );
+  }
+
+  /// Animated shimmer shown while the thumbnail is downloading from the network.
+  Widget _buildShimmerPlaceholder() {
+    return Shimmer.fromColors(
+      baseColor: const Color(0xFFE8EAF0),
+      highlightColor: const Color(0xFFF5F6FA),
+      period: const Duration(milliseconds: 1200),
+      child: Container(color: const Color(0xFFE8EAF0)),
     );
   }
 

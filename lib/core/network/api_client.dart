@@ -235,11 +235,20 @@ class ApiClient {
     final serverMessage = body is Map<String, dynamic>
         ? body['message']?.toString()
         : null;
+    final errorCode = body is Map<String, dynamic>
+        ? body['errorCode']?.toString()
+        : null;
+    final userId = body is Map<String, dynamic>
+        ? body['userId']?.toString()
+        : null;
+
     throw ApiException(
       serverMessage?.isNotEmpty == true
           ? serverMessage!
           : 'Unable to complete your request. Please try again.',
       statusCode: response.statusCode,
+      errorCode: errorCode,
+      userId: userId,
     );
   }
 }
@@ -248,7 +257,13 @@ class ApiException implements Exception {
   final String message;
   final int? statusCode;
 
-  const ApiException(this.message, {this.statusCode});
+  /// Machine-readable error code from the server (e.g. "DEVICE_LOCKED").
+  final String? errorCode;
+
+  /// UserId from the server error body (populated for DEVICE_LOCKED errors).
+  final String? userId;
+
+  const ApiException(this.message, {this.statusCode, this.errorCode, this.userId});
 
   @override
   String toString() => message;

@@ -6,6 +6,10 @@ class CourseModel {
   final String type; // ENGINEERING, POLYTECHNIC
   final String mode; // LIVE, RECORDED, BOTH, REGULAR
   final double price;
+  final double? originalPrice;
+  final bool isCombo;
+  final List<String> includedCourseIds;
+  final List<CourseModel> includedCourses;
   final int? accessDurationMonths;
   final List<String> branches;
   final List<String>? branchIds;
@@ -27,6 +31,10 @@ class CourseModel {
     this.type = 'ENGINEERING',
     this.mode = 'LIVE',
     required this.price,
+    this.originalPrice,
+    this.isCombo = false,
+    this.includedCourseIds = const [],
+    this.includedCourses = const [],
     this.accessDurationMonths,
     this.branches = const [],
     this.branchIds,
@@ -83,6 +91,15 @@ class CourseModel {
       return [];
     }
 
+    final rawBundled = json['includedCourses'];
+    List<CourseModel> parsedBundled = [];
+    if (rawBundled is List) {
+      parsedBundled = rawBundled
+          .whereType<Map<String, dynamic>>()
+          .map((e) => CourseModel.fromJson(e))
+          .toList();
+    }
+
     return CourseModel(
       id: json['id']?.toString() ?? '',
       name: json['name']?.toString() ?? 'Course',
@@ -90,6 +107,10 @@ class CourseModel {
       type: json['type']?.toString().toUpperCase() ?? 'ENGINEERING',
       mode: json['mode']?.toString().toUpperCase() ?? 'LIVE',
       price: (json['price'] is num) ? (json['price'] as num).toDouble() : 0.0,
+      originalPrice: (json['originalPrice'] is num) ? (json['originalPrice'] as num).toDouble() : null,
+      isCombo: json['isCombo'] == true || json['combo'] == true,
+      includedCourseIds: json['includedCourseIds'] != null ? parseStringList(json['includedCourseIds']) : const [],
+      includedCourses: parsedBundled,
       accessDurationMonths: json['accessDurationMonths'] is num
           ? (json['accessDurationMonths'] as num).toInt()
           : null,

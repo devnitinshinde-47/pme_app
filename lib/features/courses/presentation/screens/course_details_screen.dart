@@ -70,55 +70,98 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
     setState(() => _isSubmitting = true);
     try {
       final response = await _repository.submitPurchaseRequest(widget.course.id);
-      if (!mounted) return;
+      final isGranted = response.accessStatus?.toUpperCase() == 'GRANTED' || widget.course.price == 0;
 
       setState(() {
-        _isAlreadyRequested = true;
+        if (isGranted) {
+          _isAlreadyEnrolled = true;
+        } else {
+          _isAlreadyRequested = true;
+        }
       });
 
-      showDialog(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
-          title: Row(
-            children: const [
-              Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 28),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Request Submitted',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      if (isGranted) {
+        showDialog(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
+            title: Row(
+              children: const [
+                Icon(Icons.stars_rounded, color: AppColors.success, size: 28),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Demo Access Granted!',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
                 ),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Your enrollment request for "${widget.course.name}" has been recorded.'),
-              const SizedBox(height: 12),
-              if (response.transactionRefId != null) ...[
-                Text(
-                  'Reference ID: ${response.transactionRefId}',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary),
-                ),
-                const SizedBox(height: 6),
               ],
-              const Text(
-                'Our administration team will verify and grant access shortly.',
-                style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+            ),
+            content: Text(
+              'Free demo access to "${widget.course.name}" has been activated instantly on your account.',
+              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                  Navigator.pushNamed(
+                    context,
+                    AppRoutes.courseCurriculum,
+                    arguments: widget.course,
+                  );
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                child: const Text('Start Watching Now', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+        );
+      } else {
+        showDialog(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: AppStyles.borderRadiusLarge),
+            title: Row(
+              children: const [
+                Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 28),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Request Submitted',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      );
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Your enrollment request for "${widget.course.name}" has been recorded.'),
+                const SizedBox(height: 12),
+                if (response.transactionRefId != null) ...[
+                  Text(
+                    'Reference ID: ${response.transactionRefId}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary),
+                  ),
+                  const SizedBox(height: 6),
+                ],
+                const Text(
+                  'Our administration team will verify and grant access shortly.',
+                  style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

@@ -141,6 +141,12 @@ class AuthRepository {
     return localUpdatedUser;
   }
 
+  /// Submit a device change request when the student is locked on a different device.
+  /// [userId] comes from the DEVICE_LOCKED error response body.
+  Future<SendOtpResponse> submitDeviceChangeRequest(String userId) async {
+    return await _remoteDataSource.submitDeviceChangeRequest(userId);
+  }
+
   // ─── Mock Fallbacks ─────────────────────────────────────────────────────────
 
   Future<SendOtpResponse> _mockSendOtp(String mobileNumber) async {
