@@ -51,7 +51,7 @@ class _ComboOffersScreenState extends State<ComboOffersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFAFAFAF).withOpacity(0.05),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0.5,

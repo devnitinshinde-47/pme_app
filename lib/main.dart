@@ -42,6 +42,8 @@ void main() async {
   });
 }
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 class PawanMateEducationApp extends StatefulWidget {
   const PawanMateEducationApp({super.key});
 
@@ -55,11 +57,13 @@ class _PawanMateEducationAppState extends State<PawanMateEducationApp> with Widg
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _applyScreenProtection();
+    _setupScreenshotListener();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    ScreenProtector.removeListener();
     super.dispose();
   }
 
@@ -77,9 +81,52 @@ class _PawanMateEducationAppState extends State<PawanMateEducationApp> with Widg
     } catch (_) {}
   }
 
+  void _setupScreenshotListener() {
+    try {
+      ScreenProtector.addListener(
+        () {
+          _showSecurityNotice('Taking screenshots is not allowed in this app to protect course content.');
+        },
+        (isRecording) {
+          if (isRecording) {
+            _showSecurityNotice('Screen recording is not allowed in this app to protect course content.');
+          }
+        },
+      );
+    } catch (_) {}
+  }
+
+  void _showSecurityNotice(String message) {
+    final context = navigatorKey.currentContext;
+    if (context != null) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.shield_outlined, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: AppColors.primaryDark,
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'Pawan Mate Education',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
