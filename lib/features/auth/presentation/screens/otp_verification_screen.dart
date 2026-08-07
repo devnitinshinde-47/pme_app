@@ -444,9 +444,9 @@ class _DeviceLockedSheetState extends State<_DeviceLockedSheet> {
 
         // Title
         const Text(
-          'Device Locked',
+          'Single Device Policy Enforced',
           style: TextStyle(
-            fontSize: 20,
+            fontSize: 19,
             fontWeight: FontWeight.bold,
             color: Color(0xFF1E293B),
           ),
@@ -455,16 +455,16 @@ class _DeviceLockedSheetState extends State<_DeviceLockedSheet> {
 
         // Description
         const Text(
-          'This account is already logged in on another device. '
-          'To access your account on this device, submit a request to the admin.',
+          'To ensure account security and compliance, Pawan Mate Education accounts are limited to 1 active registered device at a time.\n\n'
+          'This account is currently bound to another device. If you have switched devices, please request a device change below for admin approval.',
           style: TextStyle(
-            fontSize: 14,
+            fontSize: 13.5,
             color: Color(0xFF64748B),
-            height: 1.5,
+            height: 1.45,
           ),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
 
         // Info note
         Container(
@@ -476,12 +476,12 @@ class _DeviceLockedSheetState extends State<_DeviceLockedSheet> {
           ),
           child: const Row(
             children: [
-              Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF0284C7)),
+              Icon(Icons.shield_outlined, size: 16, color: Color(0xFF0284C7)),
               SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Admin will review your request and approve the device change.',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF0369A1)),
+                  'Admin approval is required before completing login on a new device.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF0369A1), fontWeight: FontWeight.w500),
                 ),
               ),
             ],

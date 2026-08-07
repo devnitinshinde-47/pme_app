@@ -9,6 +9,7 @@ import '../../../auth/data/models/user_model.dart';
 import '../../../courses/data/models/course_model.dart';
 import '../../../courses/data/models/course_progress_model.dart';
 import '../../../courses/data/repositories/course_repository.dart';
+import '../../../courses/data/services/recently_visited_service.dart';
 import '../../data/models/student_live_lecture_model.dart';
 import '../../data/repositories/live_lecture_repository.dart';
 import '../../../notifications/data/repositories/notification_repository.dart';
@@ -71,6 +72,7 @@ class _HomeTabState extends State<HomeTab> {
   int _currentPage = 0;
 
   List<CourseModel> _enrolledCourses = [];
+  List<CourseModel> _recentlyVisitedCourses = [];
   Map<String, CourseProgressModel> _progressMap = {};
   List<StudentLiveLecture> _fetchedLiveLectures = [];
   int _unreadNotificationCount = 0;
@@ -80,10 +82,21 @@ class _HomeTabState extends State<HomeTab> {
   void initState() {
     super.initState();
     _loadData();
+    RecentlyVisitedService.revisionNotifier.addListener(_refreshRecentlyVisited);
+  }
+
+  void _refreshRecentlyVisited() async {
+    final recent = await RecentlyVisitedService.getRecentlyVisitedCourses();
+    if (mounted) {
+      setState(() {
+        _recentlyVisitedCourses = recent;
+      });
+    }
   }
 
   @override
   void dispose() {
+    RecentlyVisitedService.revisionNotifier.removeListener(_refreshRecentlyVisited);
     _pageController.dispose();
     super.dispose();
   }
@@ -92,6 +105,7 @@ class _HomeTabState extends State<HomeTab> {
     try {
       final courses = await _repository.getMyEnrolledCourses();
       final progress = await _repository.getAllCoursesProgress();
+      final recent = await RecentlyVisitedService.getRecentlyVisitedCourses();
 
       List<StudentLiveLecture> liveLectures = [];
       try {
@@ -121,6 +135,7 @@ class _HomeTabState extends State<HomeTab> {
 
       setState(() {
         _enrolledCourses = sorted;
+        _recentlyVisitedCourses = recent;
         _progressMap = progress;
         _fetchedLiveLectures = liveLectures;
         _unreadNotificationCount = unreadCount;
@@ -599,9 +614,10 @@ class _HomeTabState extends State<HomeTab> {
         );
       }
 
-      // 2. Continue watching card — last watched course
-      if (_enrolledCourses.isNotEmpty) {
-        final topCourse = _enrolledCourses.first;
+      // 2. Continue watching card — last watched course (excluding combo packages)
+      final singleEnrolledCourses = _enrolledCourses.where((c) => !c.isCombo).toList();
+      if (singleEnrolledCourses.isNotEmpty) {
+        final topCourse = singleEnrolledCourses.first;
         final topProgress = _progressMap[topCourse.id];
         heroPanels.add(
           _ContinueWatchingCard(
@@ -748,6 +764,9 @@ class _HomeTabState extends State<HomeTab> {
                   ),
                 ],
 
+                // ── Recently Visited Courses (Horizontal Scroll) ──────────
+                _buildRecentlyVisitedSection(),
+
                 const SizedBox(height: 28),
 
                 // ── Quick Access ──────────────────────────────────────
@@ -801,8 +820,12 @@ class _HomeTabState extends State<HomeTab> {
                       icon: Icons.all_inclusive_rounded,
                       title: 'Combo Courses',
                       subtitle: 'Bundles with offers & discounts',
-                      badgeColor: const Color(0xFF8B5CF6),
-                      onTap: () => Navigator.pushNamed(context, AppRoutes.comboOffers),
+                      badgeColor: AppColors.primary,
+                      onTap: () {
+                        if (widget.onNavigateToDiscover != null) {
+                          widget.onNavigateToDiscover!(filter: 'COMBO');
+                        }
+                      },
                     ),
                     _FeatureTile(
                       icon: Icons.school_rounded,
@@ -823,6 +846,169 @@ class _HomeTabState extends State<HomeTab> {
                       onTap: () => _showTestSeriesDialog(),
                     ),
                   ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecentlyVisitedSection() {
+    // Only display Recently Visited section for users who have NOT purchased any courses
+    if (_enrolledCourses.isNotEmpty || _recentlyVisitedCourses.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 28),
+
+        // Section Header
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: const [
+                Icon(Icons.history_rounded, size: 20, color: AppColors.primary),
+                SizedBox(width: 6),
+                Text('Recently Visited', style: AppStyles.headingMedium),
+              ],
+            ),
+            if (widget.onNavigateToDiscover != null)
+              GestureDetector(
+                onTap: () => widget.onNavigateToDiscover!(),
+                child: const Text('Explore All', style: TextStyle(color: AppColors.accent, fontSize: 12, fontWeight: FontWeight.bold)),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // Horizontal Scroll List
+        SizedBox(
+          height: 205,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: _recentlyVisitedCourses.length,
+            itemBuilder: (context, index) {
+              final course = _recentlyVisitedCourses[index];
+              return _buildRecentlyVisitedCard(course);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRecentlyVisitedCard(CourseModel course) {
+    final universityName = course.university ?? 'MSBTE';
+    final branchLabel = course.branches.isNotEmpty ? course.branches.first : 'Academic';
+
+    return Container(
+      width: 215,
+      margin: const EdgeInsets.only(right: 14),
+      child: Material(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: () {
+            Navigator.pushNamed(
+              context,
+              AppRoutes.courseDetails,
+              arguments: course,
+            ).then((_) => _loadData());
+          },
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.cardBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Banner Image (16:9) with Mode Badge overlay
+                Stack(
+                  children: [
+                    AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: course.thumbnailUrl != null && course.thumbnailUrl!.isNotEmpty
+                          ? Image.network(
+                              course.thumbnailUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) => Container(
+                                color: AppColors.primaryDark,
+                                child: const Icon(Icons.school_rounded, color: Colors.white, size: 28),
+                              ),
+                            )
+                          : Container(
+                              color: AppColors.primaryDark,
+                              child: const Icon(Icons.school_rounded, color: Colors.white, size: 28),
+                            ),
+                    ),
+                    if (course.isCombo)
+                      Positioned(
+                        top: 6,
+                        left: 6,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'COMBO',
+                            style: TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.w900),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+
+                // Info Area
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          '$universityName • $branchLabel',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          course.name,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                            height: 1.2,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),

@@ -78,11 +78,18 @@ class CourseCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.cardBorder),
+        border: Border.all(
+          color: course.isCombo
+              ? const Color(0xFFF59E0B).withValues(alpha: 0.6)
+              : AppColors.cardBorder,
+          width: course.isCombo ? 1.5 : 1.0,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
+            color: course.isCombo
+                ? const Color(0xFFF59E0B).withValues(alpha: 0.10)
+                : Colors.black.withValues(alpha: 0.04),
+            blurRadius: course.isCombo ? 12 : 8,
             offset: const Offset(0, 3),
           ),
         ],
@@ -96,21 +103,90 @@ class CourseCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── Full-Width Rectangular Image Banner (16:9) ─────────
-              AspectRatio(
-                aspectRatio: 16 / 9,
-                child: course.thumbnailUrl != null && course.thumbnailUrl!.isNotEmpty
-                    ? Image.network(
-                        course.thumbnailUrl!,
-                        fit: BoxFit.cover,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return _buildShimmerPlaceholder();
-                        },
-                        errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
-                        cacheWidth: 720,
-                        cacheHeight: 405,
-                      )
-                    : _buildPlaceholder(),
+              Stack(
+                children: [
+                  AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: course.thumbnailUrl != null && course.thumbnailUrl!.isNotEmpty
+                        ? Image.network(
+                            course.thumbnailUrl!,
+                            fit: BoxFit.cover,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return _buildShimmerPlaceholder();
+                            },
+                            errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
+                            cacheWidth: 720,
+                            cacheHeight: 405,
+                          )
+                        : _buildPlaceholder(),
+                  ),
+                  if (course.isCombo) ...[
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFD97706), Color(0xFFF59E0B)],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.25),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(Icons.stars_rounded, color: Colors.white, size: 13),
+                            SizedBox(width: 4),
+                            Text(
+                              'SPECIAL COMBO OFFER',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (course.originalPrice != null && course.originalPrice! > course.price)
+                      Positioned(
+                        top: 10,
+                        right: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEF4444),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFEF4444).withValues(alpha: 0.35),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            '🔥 ${(((course.originalPrice! - course.price) / course.originalPrice!) * 100).round()}% OFF',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ],
               ),
 
               // ── Course Info Section ────────────────────────────────
@@ -119,24 +195,43 @@ class CourseCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // University short name + Mode badge
+                    // Header category tag / Mode badge
                     Row(
                       children: [
                         Expanded(
                           child: Text(
-                            universityName,
-                            style: const TextStyle(
+                            course.isCombo
+                                ? 'COMBO OFFER BUNDLE'
+                                : universityName,
+                            style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
-                              color: AppColors.primary,
-                              letterSpacing: 0.3,
+                              color: course.isCombo ? const Color(0xFFD97706) : AppColors.primary,
+                              letterSpacing: 0.4,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const SizedBox(width: 8),
-                        _buildModeBadge(course.mode),
+                        if (course.isCombo)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'MULTI-COURSE',
+                              style: TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFFD97706),
+                              ),
+                            ),
+                          )
+                        else
+                          _buildModeBadge(course.mode),
                       ],
                     ),
                     const SizedBox(height: 5),
@@ -153,33 +248,78 @@ class CourseCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
-
-                    // Branch Label (small & simple)
-                    Text(
-                      _getBranchLabel(),
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.textMuted,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
                     const SizedBox(height: 6),
 
-                    // Expiry Date
+                    // Included Courses info for Combo, or Branch for single course
+                    if (course.isCombo) ...[
+                      if (course.includedCourses.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6.0),
+                          child: Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
+                            children: course.includedCourses.take(3).map((bundled) {
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryLight,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
+                                ),
+                                child: Text(
+                                  '✓ ${bundled.name}',
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        )
+                      else
+                        Text(
+                          'Includes ${course.includedCourseIds.isNotEmpty ? course.includedCourseIds.length : 2}+ Courses in 1 Package Offer',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFD97706),
+                          ),
+                        ),
+                      const SizedBox(height: 4),
+                    ] else ...[
+                      Text(
+                        _getBranchLabel(),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textMuted,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                    ],
+
+                    // Expiry / Duration
                     Row(
                       children: [
-                        const Icon(Icons.schedule_rounded, size: 13, color: AppColors.textMuted),
+                        Icon(
+                          course.isCombo ? Icons.all_inclusive_rounded : Icons.schedule_rounded,
+                          size: 13,
+                          color: course.isCombo ? const Color(0xFFD97706) : AppColors.textMuted,
+                        ),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            _formatExpiryDate(),
-                            style: const TextStyle(
+                            course.isCombo
+                                ? 'Full Access for ${course.accessDurationMonths ?? 12} Months to All Courses'
+                                : _formatExpiryDate(),
+                            style: TextStyle(
                               fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.textMuted,
+                              fontWeight: course.isCombo ? FontWeight.w600 : FontWeight.w500,
+                              color: course.isCombo ? AppColors.textSecondary : AppColors.textMuted,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -192,16 +332,47 @@ class CourseCard extends StatelessWidget {
                     // Price + Action Button Row
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        // Price (left side)
-                        Text(
-                          course.price > 0 ? '₹${course.price.toStringAsFixed(0)}' : 'FREE',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: course.price > 0 ? AppColors.textPrimary : AppColors.success,
-                          ),
+                        // Price (left side) with strikethrough if discounted
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (course.originalPrice != null && course.originalPrice! > course.price) ...[
+                              Row(
+                                children: [
+                                  Text(
+                                    '₹${course.originalPrice!.toStringAsFixed(0)}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textMuted,
+                                      decoration: TextDecoration.lineThrough,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    'Save ₹${(course.originalPrice! - course.price).toStringAsFixed(0)}',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.success,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 1),
+                            ],
+                            Text(
+                              course.price > 0 ? '₹${course.price.toStringAsFixed(0)}' : 'FREE',
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w900,
+                                color: course.price > 0 ? AppColors.textPrimary : AppColors.success,
+                              ),
+                            ),
+                          ],
                         ),
                         _buildActionButton(),
                       ],

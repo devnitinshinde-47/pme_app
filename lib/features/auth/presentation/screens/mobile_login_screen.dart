@@ -296,17 +296,17 @@ class _DeviceLockedBottomSheetState extends State<_DeviceLockedBottomSheet> {
         ),
         const SizedBox(height: 16),
         const Text(
-          'Device Locked',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+          'Single Device Policy Enforced',
+          style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
         ),
         const SizedBox(height: 8),
         const Text(
-          'This account is already logged in on another device. '
-          'Submit a request to the admin to switch to this device.',
-          style: TextStyle(fontSize: 14, color: Color(0xFF64748B), height: 1.5),
+          'To ensure account security and compliance, Pawan Mate Education accounts are limited to 1 active registered device at a time.\n\n'
+          'This account is currently bound to another device. If you have switched devices, please request a device change below for admin approval.',
+          style: TextStyle(fontSize: 13.5, color: Color(0xFF64748B), height: 1.45),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
@@ -316,12 +316,12 @@ class _DeviceLockedBottomSheetState extends State<_DeviceLockedBottomSheet> {
           ),
           child: const Row(
             children: [
-              Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF0284C7)),
+              Icon(Icons.shield_outlined, size: 16, color: Color(0xFF0284C7)),
               SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'OTP was NOT sent. Admin approval is required before you can login on this device.',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF0369A1)),
+                  'OTP was not sent. Admin approval is required before logging in on a new device.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF0369A1), fontWeight: FontWeight.w500),
                 ),
               ),
             ],

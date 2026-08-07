@@ -7,6 +7,7 @@ import '../../../../core/routes/app_routes.dart';
 import '../../../../core/widgets/blinking_live_badge.dart';
 import '../../data/models/course_model.dart';
 import '../../data/repositories/course_repository.dart';
+import '../../data/services/recently_visited_service.dart';
 
 /// Clean, tabbed, highly-organized Course Details Screen.
 /// Categorizes course info into Overview, Deliverables, and Access/Curriculum tabs.
@@ -40,6 +41,7 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
     _repository = widget.repository ?? CourseRepository();
     _detailsFuture = _repository.getCourseById(widget.course.id);
     _checkRequestAndEnrollmentStatus();
+    RecentlyVisitedService.addCourse(widget.course);
   }
 
   Future<void> _checkRequestAndEnrollmentStatus() async {
@@ -504,7 +506,9 @@ https://pawanmateeducation.com/courses/${course.id}
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
-                                        '${course.university ?? "ACADEMIC"} • ${isPolytechnic ? "DIPLOMA" : "DEGREE"}',
+                                        course.isCombo
+                                            ? 'COMBO BUNDLE • MULTI-COURSE'
+                                            : '${course.university ?? "ACADEMIC"} • ${isPolytechnic ? "DIPLOMA" : "DEGREE"}',
                                         style: const TextStyle(
                                           fontSize: 10.5,
                                           fontWeight: FontWeight.bold,
@@ -536,36 +540,39 @@ https://pawanmateeducation.com/courses/${course.id}
                           ),
                         ),
 
-                        // Sticky Segmented Tab Bar
-                        SliverPersistentHeader(
-                          pinned: true,
-                          delegate: _SliverTabBarDelegate(
-                            TabBar(
-                              labelColor: AppColors.primary,
-                              unselectedLabelColor: AppColors.textMuted,
-                              indicatorColor: AppColors.primary,
-                              indicatorWeight: 3,
-                              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
-                              tabs: const [
-                                Tab(text: 'Overview'),
-                                Tab(text: 'Highlights'),
-                                Tab(text: 'Deliverables'),
-                              ],
+                        // Render Tab Bar for Single Courses, or Body for Combo Courses
+                        if (!course.isCombo)
+                          SliverPersistentHeader(
+                            pinned: true,
+                            delegate: _SliverTabBarDelegate(
+                              TabBar(
+                                labelColor: AppColors.primary,
+                                unselectedLabelColor: AppColors.textMuted,
+                                indicatorColor: AppColors.primary,
+                                indicatorWeight: 3,
+                                labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+                                tabs: const [
+                                  Tab(text: 'Overview'),
+                                  Tab(text: 'Highlights'),
+                                  Tab(text: 'Deliverables'),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
                       ];
                     },
 
-                    // Tab Contents
-                    body: TabBarView(
-                      children: [
-                        _buildOverviewTab(course),
-                        _buildHighlightsTab(course),
-                        _buildDeliverablesTab(course),
-                      ],
-                    ),
+                    // Body Contents: Streamlined Single View for Combos, TabBarView for Single Courses
+                    body: course.isCombo
+                        ? _buildComboDetailsView(course)
+                        : TabBarView(
+                            children: [
+                              _buildOverviewTab(course),
+                              _buildHighlightsTab(course),
+                              _buildDeliverablesTab(course),
+                            ],
+                          ),
                   ),
                 ),
 
@@ -575,6 +582,388 @@ https://pawanmateeducation.com/courses/${course.id}
             );
           },
         ),
+      ),
+    );
+  }
+
+  // ── DEDICATED STREAMLINED COMBO DETAILS VIEW ──────────────────────────────
+  Widget _buildComboDetailsView(CourseModel course) {
+    final origPrice = course.originalPrice;
+    final price = course.price;
+    final hasDiscount = origPrice != null && origPrice > price;
+    final discountPct = hasDiscount ? (((origPrice - price) / origPrice) * 100).round() : 0;
+    final savings = hasDiscount ? (origPrice - price) : 0.0;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(18.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Quick Validity Metrics Grid ──────────────────────────────────
+          Row(
+            children: [
+              _buildOverviewMetricTile(
+                icon: Icons.event_available_rounded,
+                iconColor: AppColors.primary,
+                label: 'START DATE',
+                value: _formatDateDdMmYyyy(course.startDate),
+              ),
+              const SizedBox(width: 10),
+              _buildOverviewMetricTile(
+                icon: Icons.event_busy_rounded,
+                iconColor: AppColors.accent,
+                label: 'EXPIRY DATE',
+                value: _formatDateDdMmYyyy(course.endDate),
+              ),
+              const SizedBox(width: 10),
+              _buildOverviewMetricTile(
+                icon: Icons.timer_outlined,
+                iconColor: const Color(0xFF10B981),
+                label: 'VALIDITY',
+                value: '${course.accessDurationMonths ?? 12} Mos',
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+
+          // ── Urgency Offer Banner ─────────────────────────────────────────
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppColors.primaryDark, AppColors.primary],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.25),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.stars_rounded, color: AppColors.accent, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.accent,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text(
+                              'SPECIAL BUNDLE OFFER',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                          if (hasDiscount) ...[
+                            const SizedBox(width: 6),
+                            Text(
+                              '$discountPct% OFF',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        hasDiscount
+                            ? 'Save ₹${savings.toStringAsFixed(0)} Instantly on this Bundle!'
+                            : 'Get Full Multi-Course Bundle at Discounted Rate!',
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 22),
+
+          // ── Included Courses Section (Clickable Cards) ────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: const [
+              Text('Included Courses', style: AppStyles.headingMedium),
+              Text(
+                'Tap course to view details',
+                style: TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          if (course.includedCourses.isNotEmpty)
+            ...course.includedCourses.map((bundled) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: Material(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.pushNamed(
+                        context,
+                        AppRoutes.courseDetails,
+                        arguments: bundled,
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.cardBorder),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.02),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: SizedBox(
+                              width: 52,
+                              height: 52,
+                              child: bundled.thumbnailUrl != null && bundled.thumbnailUrl!.isNotEmpty
+                                  ? Image.network(bundled.thumbnailUrl!, fit: BoxFit.cover)
+                                  : Container(
+                                      color: AppColors.primaryLight,
+                                      child: const Icon(Icons.menu_book_rounded, color: AppColors.primary),
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  bundled.name,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  '${bundled.university ?? "MSBTE"} • ${bundled.year ?? "Academic Year"}',
+                                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    if (bundled.price > 0)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.primaryLight,
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          'Valued at ₹${bundled.price.toStringAsFixed(0)}',
+                                          style: const TextStyle(
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.bold,
+                                            color: AppColors.primary,
+                                          ),
+                                        ),
+                                      ),
+                                    const Spacer(),
+                                    Row(
+                                      children: const [
+                                        Text(
+                                          'View Details',
+                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.accent),
+                                        ),
+                                        SizedBox(width: 2),
+                                        Icon(Icons.arrow_forward_ios_rounded, size: 10, color: AppColors.accent),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            })
+          else
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                'Includes full access to all constituent subject lectures & study materials.',
+                style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.bold),
+              ),
+            ),
+
+          const SizedBox(height: 8),
+
+          // ── Pricing Breakdown Card ───────────────────────────────────────
+          if (hasDiscount) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'PRICING BREAKDOWN',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.primary,
+                      letterSpacing: 0.6,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Total Individual Courses Price', style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
+                      Text(
+                        '₹${origPrice.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textMuted,
+                          decoration: TextDecoration.lineThrough,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Combo Bundle Special Price', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                      Text(
+                        '₹${price.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Divider(height: 1, color: AppColors.cardBorder),
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: const [
+                          Icon(Icons.verified_rounded, size: 14, color: AppColors.success),
+                          SizedBox(width: 4),
+                          Text('Your Instant Savings', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppColors.success)),
+                        ],
+                      ),
+                      Text(
+                        'Save ₹${savings.toStringAsFixed(0)} ($discountPct% OFF)',
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.success,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+
+          // ── Package Benefits ─────────────────────────────────────────────
+          const Text('Package Benefits', style: AppStyles.headingMedium),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.cardBorder),
+            ),
+            child: Column(
+              children: const [
+                _CompactDeliverableTile(
+                  icon: Icons.all_inclusive_rounded,
+                  iconColor: AppColors.primary,
+                  title: 'Full Dual Course Access',
+                  subtitle: 'Simultaneous access to lectures, notes & test series of both courses',
+                ),
+                Divider(height: 1, indent: 52, endIndent: 16, color: AppColors.cardBorder),
+                _CompactDeliverableTile(
+                  icon: Icons.menu_book_rounded,
+                  iconColor: AppColors.accent,
+                  title: 'Comprehensive Study Notes & PYQs',
+                  subtitle: 'Theory notes, solved numericals & university question papers',
+                ),
+                Divider(height: 1, indent: 52, endIndent: 16, color: AppColors.cardBorder),
+                _CompactDeliverableTile(
+                  icon: Icons.support_agent_rounded,
+                  iconColor: Color(0xFF00BFA5),
+                  title: '24/7 Doubt Solving Support',
+                  subtitle: 'Academic assistance for conceptual & numerical queries',
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+        ],
       ),
     );
   }
@@ -613,6 +1002,274 @@ https://pawanmateeducation.com/courses/${course.id}
           ),
 
           const SizedBox(height: 20),
+
+          // Included Courses Section for Combo Offers (Marketing & Pricing Focused)
+          if (course.isCombo || course.includedCourses.isNotEmpty) ...[
+            // Limited Time Offer Marketing Banner
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.primaryDark, AppColors.primary],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.25),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.timer_rounded, color: AppColors.accent, size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.accent,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'LIMITED TIME OFFER',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                            if (course.originalPrice != null && course.originalPrice! > course.price) ...[
+                              const SizedBox(width: 6),
+                              Text(
+                                '${(((course.originalPrice! - course.price) / course.originalPrice!) * 100).round()}% OFF',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          course.originalPrice != null && course.originalPrice! > course.price
+                              ? 'Save ₹${(course.originalPrice! - course.price).toStringAsFixed(0)} Instantly on this Bundle!'
+                              : 'Get Full Multi-Course Bundle at Discounted Rate!',
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+
+            const Text('Included Courses & Subjects', style: AppStyles.headingMedium),
+            const SizedBox(height: 10),
+
+            if (course.includedCourses.isNotEmpty)
+              ...course.includedCourses.map((bundled) {
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.cardBorder),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.02),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: SizedBox(
+                          width: 54,
+                          height: 54,
+                          child: bundled.thumbnailUrl != null && bundled.thumbnailUrl!.isNotEmpty
+                              ? Image.network(bundled.thumbnailUrl!, fit: BoxFit.cover)
+                              : Container(color: AppColors.primaryLight, child: const Icon(Icons.menu_book_rounded, color: AppColors.primary)),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              bundled.name,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: AppColors.textPrimary),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              '${bundled.university ?? "MSBTE"} • ${bundled.year ?? "Academic Year"}',
+                              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                const Icon(Icons.check_circle_rounded, size: 13, color: AppColors.success),
+                                const SizedBox(width: 4),
+                                const Text(
+                                  'Full Syllabus Included',
+                                  style: TextStyle(fontSize: 10.5, color: AppColors.textMuted, fontWeight: FontWeight.w500),
+                                ),
+                                const Spacer(),
+                                if (bundled.price > 0)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primaryLight,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      'Valued at ₹${bundled.price.toStringAsFixed(0)}',
+                                      style: const TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              })
+            else
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'Includes full access to all constituent subject lectures & study materials.',
+                  style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.bold),
+                ),
+              ),
+
+            // Grand Pricing Summary Breakdown Card
+            if (course.originalPrice != null && course.originalPrice! > course.price) ...[
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'PRICING BREAKDOWN',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.primary,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Total Individual Courses Price', style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
+                        Text(
+                          '₹${course.originalPrice!.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textMuted,
+                            decoration: TextDecoration.lineThrough,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Combo Bundle Special Price', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                        Text(
+                          '₹${course.price.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Divider(height: 1, color: AppColors.cardBorder),
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: const [
+                            Icon(Icons.verified_rounded, size: 14, color: AppColors.success),
+                            SizedBox(width: 4),
+                            Text('Your Instant Savings', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppColors.success)),
+                          ],
+                        ),
+                        Text(
+                          'Save ₹${(course.originalPrice! - course.price).toStringAsFixed(0)} (${(((course.originalPrice! - course.price) / course.originalPrice!) * 100).round()}% OFF)',
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.success,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 20),
+          ],
 
           // Course Overview Box
           const Text('About This Course', style: AppStyles.headingMedium),
@@ -843,9 +1500,9 @@ https://pawanmateeducation.com/courses/${course.id}
                   const Divider(height: 1, indent: 52, endIndent: 16, color: AppColors.cardBorder),
                 ],
 
-                const _CompactDeliverableTile(
+                 const _CompactDeliverableTile(
                   icon: Icons.sticky_note_2_rounded,
-                  iconColor: Color(0xFF8B5CF6),
+                  iconColor: AppColors.primary,
                   title: 'Lecture-Wise Revision Notes',
                   subtitle: 'Short formula sheets & exam shortcut tricks',
                 ),
@@ -968,6 +1625,38 @@ https://pawanmateeducation.com/courses/${course.id}
                       style: TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w500),
                     ),
                   ] else ...[
+                    if (course.originalPrice != null && course.originalPrice! > course.price) ...[
+                      Row(
+                        children: [
+                          Text(
+                            '₹${course.originalPrice!.toStringAsFixed(0)}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textMuted,
+                              decoration: TextDecoration.lineThrough,
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFDC2626),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              '${(((course.originalPrice! - course.price) / course.originalPrice!) * 100).round()}% OFF',
+                              style: const TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 1),
+                    ],
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.baseline,
                       textBaseline: TextBaseline.alphabetic,
@@ -976,20 +1665,26 @@ https://pawanmateeducation.com/courses/${course.id}
                           course.price > 0 ? '₹${course.price.toStringAsFixed(0)}' : 'FREE',
                           style: TextStyle(
                             fontSize: 22,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w900,
                             color: course.price > 0 ? AppColors.textPrimary : AppColors.success,
                           ),
                         ),
                         const SizedBox(width: 4),
-                        const Text(
-                          '/ total',
-                          style: TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w500),
+                        Text(
+                          course.isCombo ? '/ combo' : '/ total',
+                          style: const TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w500),
                         ),
                       ],
                     ),
                     Text(
-                      '${course.accessDurationMonths ?? 12} Months Full Access',
-                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                      course.originalPrice != null && course.originalPrice! > course.price
+                          ? 'Save ₹${(course.originalPrice! - course.price).toStringAsFixed(0)} • ${course.accessDurationMonths ?? 12} Mos Access'
+                          : '${course.accessDurationMonths ?? 12} Months Full Access',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: (course.originalPrice != null && course.originalPrice! > course.price) ? AppColors.success : AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ],
@@ -1002,16 +1697,26 @@ https://pawanmateeducation.com/courses/${course.id}
             if (_isAlreadyEnrolled)
               ElevatedButton.icon(
                 onPressed: () {
-                  Navigator.pushNamed(
-                    context,
-                    AppRoutes.courseCurriculum,
-                    arguments: course,
-                  );
+                  if (course.isCombo) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Access Granted! You have access to all included courses in My Courses.'),
+                        backgroundColor: AppColors.success,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  } else {
+                    Navigator.pushNamed(
+                      context,
+                      AppRoutes.courseCurriculum,
+                      arguments: course,
+                    );
+                  }
                 },
-                icon: const Icon(Icons.play_circle_fill_rounded, size: 18, color: Colors.white),
-                label: const Text(
-                  'Start Learning',
-                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Colors.white),
+                icon: Icon(course.isCombo ? Icons.check_circle_rounded : Icons.play_circle_fill_rounded, size: 18, color: Colors.white),
+                label: Text(
+                  course.isCombo ? 'Access Granted' : 'Start Learning',
+                  style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.success,
@@ -1052,7 +1757,11 @@ https://pawanmateeducation.com/courses/${course.id}
                       )
                     : const Icon(Icons.arrow_forward_rounded, size: 18, color: Colors.white),
                 label: Text(
-                  _isSubmitting ? 'Submitting...' : 'Request Access',
+                  _isSubmitting
+                      ? 'Submitting...'
+                      : course.isCombo
+                          ? 'Request Combo Access'
+                          : 'Request Access',
                   style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 style: ElevatedButton.styleFrom(

@@ -6,7 +6,7 @@ import '../models/system_config_model.dart';
 class SystemConfigService {
   Future<SystemConfigModel?> fetchSystemConfig() async {
     try {
-      final uri = Uri.parse('${ApiConstants.baseUrl}/api/system-config');
+      final uri = Uri.parse('${ApiConstants.apiBaseUrl}/system-config');
       final response = await http.get(uri).timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {

@@ -69,7 +69,7 @@ class _MyCoursesScreenState extends State<MyCoursesScreen> {
   }
 
   List<CourseModel> get _filteredCourses {
-    final list = List<CourseModel>.from(_enrolledCourses);
+    final list = _enrolledCourses.where((c) => !c.isCombo).toList();
     list.sort((a, b) {
       final progA = _coursesProgress[a.id]?.progressPercentage ?? 0.0;
       final progB = _coursesProgress[b.id]?.progressPercentage ?? 0.0;

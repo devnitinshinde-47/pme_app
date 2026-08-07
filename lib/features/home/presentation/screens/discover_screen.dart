@@ -33,7 +33,8 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   late final CourseRepository _courseRepository;
   late final TextEditingController _searchController;
 
-  String _selectedCategoryPill = 'All'; // 'All', 'MSBTE', 'SPPU', 'DBATU', 'DEMO', 'RECORDED', 'LIVE'
+  String _selectedUniversity = 'All'; // 'All', 'MSBTE', 'SPPU', 'DBATU'
+  String _selectedModeFilter = 'All'; // 'All', 'COMBO', 'LIVE', 'RECORDED', 'DEMO'
   String _selectedType = 'All'; // 'All', 'ENGINEERING', 'POLYTECHNIC'
   String _selectedBranch = 'All'; // 'All', 'Mechanical', 'Computer', etc.
   String _searchQuery = '';
@@ -44,14 +45,19 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   Set<String> _requestedCourseIds = {};
   Set<String> _enrolledCourseIds = {};
 
-  static const List<Map<String, String>> _categoryPills = [
-    {'id': 'All', 'label': 'All Courses'},
+  static const List<Map<String, String>> _universities = [
+    {'id': 'All', 'label': 'All'},
     {'id': 'MSBTE', 'label': 'MSBTE'},
     {'id': 'SPPU', 'label': 'SPPU'},
     {'id': 'DBATU', 'label': 'DBATU'},
-    {'id': 'LIVE', 'label': 'Live Batches'},
-    {'id': 'RECORDED', 'label': 'Recorded'},
-    {'id': 'DEMO', 'label': 'Demo'},
+  ];
+
+  static const List<Map<String, String>> _modePills = [
+    {'id': 'All', 'label': 'All Courses'},
+    {'id': 'COMBO', 'label': '🎁 Combo Offers'},
+    {'id': 'LIVE', 'label': '🔴 Live Batches'},
+    {'id': 'RECORDED', 'label': '📹 Recorded'},
+    {'id': 'DEMO', 'label': '⚡ Free / Demo'},
   ];
 
   static const List<String> _courseTypes = ['All', 'ENGINEERING', 'POLYTECHNIC'];
@@ -70,10 +76,15 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     super.initState();
     _courseRepository = widget.courseRepository ?? CourseRepository();
     _searchController = TextEditingController();
-    // Apply the initial category filter passed from Home Quick Access cards
-    if (widget.initialCategoryPill != null &&
-        widget.initialCategoryPill!.isNotEmpty) {
-      _selectedCategoryPill = widget.initialCategoryPill!;
+    
+    // Apply initial category filter passed from Home Quick Access cards
+    if (widget.initialCategoryPill != null && widget.initialCategoryPill!.isNotEmpty) {
+      final initVal = widget.initialCategoryPill!;
+      if (['MSBTE', 'SPPU', 'DBATU'].contains(initVal)) {
+        _selectedUniversity = initVal;
+      } else if (['COMBO', 'LIVE', 'RECORDED', 'DEMO'].contains(initVal)) {
+        _selectedModeFilter = initVal;
+      }
     }
     _loadMasterBranches();
     _loadCourses();
@@ -98,17 +109,28 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
   int get _activeFilterCount {
     int count = 0;
+    if (_selectedUniversity != 'All') count++;
+    if (_selectedModeFilter != 'All') count++;
     if (_selectedType != 'All') count++;
     if (_selectedBranch != 'All') count++;
     return count;
   }
 
-  String get _currentPillLabel {
-    final pill = _categoryPills.firstWhere(
-      (p) => p['id'] == _selectedCategoryPill,
-      orElse: () => {'id': 'All', 'label': 'All Courses'},
-    );
-    return pill['label']!;
+  String get _resultsHeaderTitle {
+    final parts = <String>[];
+    if (_selectedUniversity != 'All') parts.add(_selectedUniversity);
+    if (_selectedModeFilter != 'All') {
+      final modePill = _modePills.firstWhere(
+        (p) => p['id'] == _selectedModeFilter,
+        orElse: () => {'id': 'All', 'label': 'All Courses'},
+      );
+      parts.add(modePill['label']!.replaceAll(RegExp(r'[^\w\s]'), '').trim());
+    }
+
+    if (parts.isEmpty) {
+      return 'All Available Courses (${_courses.length})';
+    }
+    return '${parts.join(" • ")} (${_courses.length})';
   }
 
   Future<void> _loadCourses() async {
@@ -118,12 +140,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     });
 
     try {
-      String? univFilter;
-      if (_selectedCategoryPill == 'MSBTE' ||
-          _selectedCategoryPill == 'SPPU' ||
-          _selectedCategoryPill == 'DBATU') {
-        univFilter = _selectedCategoryPill;
-      }
+      final univFilter = _selectedUniversity == 'All' ? null : _selectedUniversity;
 
       final response = await _courseRepository.getCourses(
         university: univFilter,
@@ -139,22 +156,38 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
       List<CourseModel> content = response.content;
 
-      if (_selectedCategoryPill == 'LIVE') {
-        content = content
-            .where((c) =>
-                c.mode.toUpperCase() == 'LIVE' ||
-                c.mode.toUpperCase() == 'BOTH' ||
-                c.mode.toUpperCase() == 'LIVE_RECORDED')
-            .toList();
-      } else if (_selectedCategoryPill == 'RECORDED') {
-        content = content
-            .where((c) =>
-                c.mode.toUpperCase() == 'RECORDED' ||
-                c.mode.toUpperCase() == 'BOTH' ||
-                c.mode.toUpperCase() == 'LIVE_RECORDED')
-            .toList();
-      } else if (_selectedCategoryPill == 'DEMO') {
-        content = content.where((c) => c.price <= 0).toList();
+      if (_selectedModeFilter == 'COMBO') {
+        var comboCourses = await _courseRepository.getComboCourses();
+        if (univFilter != null) {
+          comboCourses = comboCourses.where((c) {
+            final u = (c.university ?? '').toUpperCase();
+            final name = c.name.toUpperCase();
+            final target = univFilter.toUpperCase();
+            return u.contains(target) || name.contains(target);
+          }).toList();
+        }
+        content = comboCourses;
+      } else {
+        // Exclude combo offer packages from single course discovery views
+        content = content.where((c) => !c.isCombo).toList();
+
+        if (_selectedModeFilter == 'LIVE') {
+          content = content
+              .where((c) =>
+                  c.mode.toUpperCase() == 'LIVE' ||
+                  c.mode.toUpperCase() == 'BOTH' ||
+                  c.mode.toUpperCase() == 'LIVE_RECORDED')
+              .toList();
+        } else if (_selectedModeFilter == 'RECORDED') {
+          content = content
+              .where((c) =>
+                  c.mode.toUpperCase() == 'RECORDED' ||
+                  c.mode.toUpperCase() == 'BOTH' ||
+                  c.mode.toUpperCase() == 'LIVE_RECORDED')
+              .toList();
+        } else if (_selectedModeFilter == 'DEMO') {
+          content = content.where((c) => c.price <= 0).toList();
+        }
       }
 
       setState(() {
@@ -175,7 +208,8 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
 
   void _resetFilters() {
     setState(() {
-      _selectedCategoryPill = 'All';
+      _selectedUniversity = 'All';
+      _selectedModeFilter = 'All';
       _selectedType = 'All';
       _selectedBranch = 'All';
       _searchQuery = '';
@@ -493,7 +527,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           ),
         ),
         actions: [
-          if (_activeFilterCount > 0 || _selectedCategoryPill != 'All' || _searchQuery.isNotEmpty)
+          if (_activeFilterCount > 0 || _searchQuery.isNotEmpty)
             TextButton(
               onPressed: _resetFilters,
               child: const Text('Reset', style: TextStyle(color: AppColors.accent, fontWeight: FontWeight.bold, fontSize: 13)),
@@ -593,45 +627,54 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                   ],
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
 
-                // Category Pills (MSBTE, SPPU, DBATU, Demo, Recorded, Live)
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
+                // ── Tier 1: University Selector Bar ───────────────────────────────
+                Container(
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.cardBorder),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.03),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
                   child: Row(
-                    children: _categoryPills.map((pill) {
-                      final pillId = pill['id']!;
-                      final pillLabel = pill['label']!;
-                      final isSelected = _selectedCategoryPill == pillId;
+                    children: _universities.map((u) {
+                      final id = u['id']!;
+                      final label = u['label']!;
+                      final isSelected = _selectedUniversity == id;
 
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8.0),
+                      return Expanded(
                         child: GestureDetector(
                           onTap: () {
-                            setState(() => _selectedCategoryPill = pillId);
+                            setState(() => _selectedUniversity = id);
                             _loadCourses();
                           },
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 200),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            margin: const EdgeInsets.all(3.5),
                             decoration: BoxDecoration(
-                              color: isSelected ? AppColors.primary : AppColors.surface,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: isSelected ? AppColors.primary : AppColors.cardBorder,
-                              ),
+                              color: isSelected ? AppColors.primary : Colors.transparent,
+                              borderRadius: BorderRadius.circular(10),
                               boxShadow: isSelected
                                   ? [
                                       BoxShadow(
-                                        color: AppColors.primary.withValues(alpha: 0.3),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 3),
+                                        color: AppColors.primary.withValues(alpha: 0.25),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 2),
                                       ),
                                     ]
                                   : null,
                             ),
+                            alignment: Alignment.center,
                             child: Text(
-                              pillLabel,
+                              label,
                               style: TextStyle(
                                 color: isSelected ? Colors.white : AppColors.textPrimary,
                                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
@@ -645,16 +688,67 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
+
+                // ── Tier 2: Delivery & Offer Mode Pills ──────────────────
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: _modePills.map((pill) {
+                      final pillId = pill['id']!;
+                      final pillLabel = pill['label']!;
+                      final isSelected = _selectedModeFilter == pillId;
+
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8.0),
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() => _selectedModeFilter = pillId);
+                            _loadCourses();
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppColors.primaryLight : AppColors.surface,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: isSelected ? AppColors.primary : AppColors.cardBorder,
+                                width: isSelected ? 1.5 : 1,
+                              ),
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: AppColors.primary.withValues(alpha: 0.12),
+                                        blurRadius: 6,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            child: Text(
+                              pillLabel,
+                              style: TextStyle(
+                                color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
 
                 // Section Header
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      _selectedCategoryPill == 'All'
-                          ? 'All Available Courses (${_courses.length})'
-                          : '$_currentPillLabel (${_courses.length})',
+                      _resultsHeaderTitle,
                       style: AppStyles.headingMedium,
                     ),
                   ],

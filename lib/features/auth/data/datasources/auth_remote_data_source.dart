@@ -110,7 +110,7 @@ class AuthRemoteDataSource {
   Future<SendOtpResponse> submitDeviceChangeRequest(String userId) async {
     final deviceId = await _deviceIdService.getDeviceId();
     final responseJson = await _apiClient.post(
-      endpoint: '/api/auth/device-change-requests',
+      endpoint: '/device-change-requests',
       body: {
         'userId': userId,
         'newDeviceId': deviceId,

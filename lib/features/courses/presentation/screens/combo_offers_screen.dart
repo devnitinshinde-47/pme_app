@@ -3,7 +3,6 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/app_routes.dart';
 import '../../data/models/course_model.dart';
 import '../../data/repositories/course_repository.dart';
-import '../widgets/course_detail_sheet.dart';
 
 class ComboOffersScreen extends StatefulWidget {
   const ComboOffersScreen({super.key});
@@ -99,14 +98,15 @@ class _ComboOffersScreenState extends State<ComboOffersScreen> {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+          colors: [AppColors.primaryDark, AppColors.primary],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primaryLight.withValues(alpha: 0.15)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF6366F1).withOpacity(0.3),
+            color: AppColors.primary.withValues(alpha: 0.22),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -117,18 +117,25 @@ class _ComboOffersScreenState extends State<ComboOffersScreen> {
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text(
-                  'SPECIAL COMBO OFFERS',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.2,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'SPECIAL COMBO OFFERS',
+                    style: TextStyle(
+                      color: AppColors.accent,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.1,
+                    ),
                   ),
                 ),
-                SizedBox(height: 6),
-                Text(
+                const SizedBox(height: 8),
+                const Text(
                   'Bundle & Save Extra!',
                   style: TextStyle(
                     color: Colors.white,
@@ -136,13 +143,13 @@ class _ComboOffersScreenState extends State<ComboOffersScreen> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                SizedBox(height: 4),
-                Text(
+                const SizedBox(height: 4),
+                const Text(
                   'Get complete multi-subject packages at massive combined discounts.',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: AppColors.primaryLight,
                     fontSize: 12,
-                    height: 1.3,
+                    height: 1.35,
                   ),
                 ),
               ],
@@ -152,13 +159,14 @@ class _ComboOffersScreenState extends State<ComboOffersScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: AppColors.accent.withValues(alpha: 0.18),
               shape: BoxShape.circle,
+              border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
             ),
             child: const Icon(
               Icons.card_giftcard_rounded,
-              color: Colors.white,
-              size: 32,
+              color: AppColors.accent,
+              size: 30,
             ),
           ),
         ],
@@ -177,32 +185,35 @@ class _ComboOffersScreenState extends State<ComboOffersScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.purple.shade100, width: 1.5),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFFF59E0B).withValues(alpha: 0.6),
+          width: 1.5,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.purple.withOpacity(0.06),
+            color: const Color(0xFFF59E0B).withValues(alpha: 0.10),
             blurRadius: 12,
-            offset: const Offset(0, 4),
+            offset: const Offset(0, 3),
           ),
         ],
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header Thumbnail + Badge
           Stack(
             children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
+              AspectRatio(
+                aspectRatio: 16 / 9,
                 child: combo.thumbnailUrl != null && combo.thumbnailUrl!.isNotEmpty
                     ? Image.network(
                         combo.thumbnailUrl!,
-                        height: 160,
                         width: double.infinity,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _buildPlaceholderThumbnail(),
+                        errorBuilder: (context, error, stackTrace) => _buildPlaceholderThumbnail(),
                       )
                     : _buildPlaceholderThumbnail(),
               ),
@@ -213,24 +224,28 @@ class _ComboOffersScreenState extends State<ComboOffersScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [Color(0xFF8B5CF6), Color(0xFFD946EF)],
+                      colors: [Color(0xFFD97706), Color(0xFFF59E0B)],
                     ),
                     borderRadius: BorderRadius.circular(20),
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
                     ],
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: const [
-                      Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 12),
+                      Icon(Icons.stars_rounded, color: Colors.white, size: 13),
                       SizedBox(width: 4),
                       Text(
-                        'COMBO PACKAGE',
+                        'SPECIAL COMBO OFFER',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 10,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w800,
                           letterSpacing: 0.5,
                         ),
                       ),
@@ -245,8 +260,15 @@ class _ComboOffersScreenState extends State<ComboOffersScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF22C55E),
+                      color: const Color(0xFFEF4444),
                       borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.accent.withValues(alpha: 0.3),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: Text(
                       '$discountPct% OFF',
@@ -273,7 +295,7 @@ class _ComboOffersScreenState extends State<ComboOffersScreen> {
                     color: AppColors.textPrimary,
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    height: 1.2,
+                    height: 1.25,
                   ),
                 ),
                 if (combo.description != null && combo.description!.isNotEmpty) ...[
@@ -282,36 +304,36 @@ class _ComboOffersScreenState extends State<ComboOffersScreen> {
                     combo.description!,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
                       fontSize: 12,
-                      height: 1.3,
+                      height: 1.35,
                     ),
                   ),
                 ],
 
-                // Included Courses Pill List
+                // Included Courses Section
                 if (combo.includedCourses.isNotEmpty || combo.includedCourseIds.isNotEmpty) ...[
                   const SizedBox(height: 14),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.purple.shade50.withOpacity(0.5),
+                      color: AppColors.primaryLight,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.purple.shade100),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            Icon(Icons.widgets_outlined, size: 14, color: Colors.purple.shade700),
+                            const Icon(Icons.widgets_outlined, size: 14, color: AppColors.primary),
                             const SizedBox(width: 6),
                             Text(
                               'Includes ${combo.includedCourses.isNotEmpty ? combo.includedCourses.length : combo.includedCourseIds.length} Courses in 1 Package:',
-                              style: TextStyle(
-                                color: Colors.purple.shade900,
+                              style: const TextStyle(
+                                color: AppColors.primary,
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -325,17 +347,17 @@ class _ComboOffersScreenState extends State<ComboOffersScreen> {
                             runSpacing: 6,
                             children: combo.includedCourses.map((bundled) {
                               return Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
                                 decoration: BoxDecoration(
-                                  color: Colors.white,
+                                  color: AppColors.surface,
                                   borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.purple.shade200),
+                                  border: Border.all(color: AppColors.cardBorder),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(Icons.check_circle_rounded, size: 12, color: Color(0xFF8B5CF6)),
-                                    const SizedBox(width: 4),
+                                    const Icon(Icons.check_circle_rounded, size: 12, color: AppColors.accent),
+                                    const SizedBox(width: 5),
                                     Text(
                                       bundled.name,
                                       style: const TextStyle(
@@ -350,9 +372,9 @@ class _ComboOffersScreenState extends State<ComboOffersScreen> {
                             }).toList(),
                           )
                         else
-                          Text(
+                          const Text(
                             'Full access to all bundled subject lectures & notes',
-                            style: TextStyle(color: Colors.purple.shade800, fontSize: 11),
+                            style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
                           ),
                       ],
                     ),
@@ -360,7 +382,7 @@ class _ComboOffersScreenState extends State<ComboOffersScreen> {
                 ],
 
                 const SizedBox(height: 16),
-                const Divider(height: 1),
+                const Divider(height: 1, color: AppColors.cardBorder),
                 const SizedBox(height: 12),
 
                 // Pricing & Action Row
@@ -370,31 +392,46 @@ class _ComboOffersScreenState extends State<ComboOffersScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (origPrice != null && origPrice > price)
-                            Text(
-                              '₹${origPrice.toStringAsFixed(0)}',
-                              style: TextStyle(
-                                color: Colors.grey.shade400,
-                                fontSize: 13,
-                                decoration: TextDecoration.lineThrough,
-                                fontWeight: FontWeight.bold,
-                              ),
+                          if (origPrice != null && origPrice > price) ...[
+                            Row(
+                              children: [
+                                Text(
+                                  '₹${origPrice.toStringAsFixed(0)}',
+                                  style: const TextStyle(
+                                    color: AppColors.textMuted,
+                                    fontSize: 12,
+                                    decoration: TextDecoration.lineThrough,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Save ₹${(origPrice - price).toStringAsFixed(0)}',
+                                  style: const TextStyle(
+                                    color: AppColors.success,
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
+                            const SizedBox(height: 1),
+                          ],
                           Row(
                             children: [
                               Text(
                                 price == 0 ? 'Free' : '₹${price.toStringAsFixed(0)}',
                                 style: const TextStyle(
-                                  color: Color(0xFF6366F1),
-                                  fontSize: 20,
+                                  color: AppColors.primary,
+                                  fontSize: 19,
                                   fontWeight: FontWeight.w900,
                                 ),
                               ),
-                              const SizedBox(width: 6),
-                              Text(
-                                '/ Combo Access',
+                              const SizedBox(width: 5),
+                              const Text(
+                                '/ Combo Package',
                                 style: TextStyle(
-                                  color: Colors.grey.shade500,
+                                  color: AppColors.textMuted,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w500,
                                 ),
@@ -406,18 +443,23 @@ class _ComboOffersScreenState extends State<ComboOffersScreen> {
                     ),
                     ElevatedButton(
                       onPressed: () {
-                        CourseDetailSheet.show(context, combo, _courseRepository);
+                        Navigator.pushNamed(
+                          context,
+                          AppRoutes.courseDetails,
+                          arguments: combo,
+                        );
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF6366F1),
+                        backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        elevation: 0,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        elevation: 2,
                       ),
                       child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: const [
                           Text('View Package', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                           SizedBox(width: 4),
@@ -437,17 +479,15 @@ class _ComboOffersScreenState extends State<ComboOffersScreen> {
 
   Widget _buildPlaceholderThumbnail() {
     return Container(
-      height: 160,
-      width: double.infinity,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+          colors: [AppColors.primaryDark, AppColors.primary],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
       ),
       child: const Center(
-        child: Icon(Icons.school_rounded, size: 48, color: Colors.white30),
+        child: Icon(Icons.school_rounded, size: 48, color: AppColors.primaryLight),
       ),
     );
   }
@@ -461,11 +501,11 @@ class _ComboOffersScreenState extends State<ComboOffersScreen> {
           children: [
             Container(
               padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.purple.shade50,
+              decoration: const BoxDecoration(
+                color: AppColors.primaryLight,
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.card_giftcard_rounded, size: 48, color: Colors.purple.shade400),
+              child: const Icon(Icons.card_giftcard_rounded, size: 48, color: AppColors.primary),
             ),
             const SizedBox(height: 16),
             const Text(
@@ -478,10 +518,10 @@ class _ComboOffersScreenState extends State<ComboOffersScreen> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
-            Text(
+            const Text(
               'Check back soon for special multi-course bundles and discounts!',
               style: TextStyle(
-                color: Colors.grey.shade600,
+                color: AppColors.textSecondary,
                 fontSize: 12,
               ),
               textAlign: TextAlign.center,
@@ -509,8 +549,12 @@ class _ComboOffersScreenState extends State<ComboOffersScreen> {
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _fetchCombos,
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-              child: const Text('Retry', style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Retry'),
             ),
           ],
         ),
